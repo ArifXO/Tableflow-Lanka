@@ -37,7 +37,7 @@
         <div class="bg-[#fcfcf2] dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
           <div class="p-6 text-gray-900 dark:text-gray-100">
             <h3 class="text-lg font-semibold mb-4">Order History</h3>
-            
+
             <div v-if="loading" class="text-center py-8">
               <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100 mx-auto"></div>
               <p class="mt-2 text-gray-600 dark:text-gray-400">Loading orders...</p>
@@ -91,16 +91,14 @@
                   </div>
                 </div>
 
-                <!-- Complete Order Button -->
-                <div v-if="order.status !== 'delivered' && order.status !== 'cancelled'" class="mt-3">
-                  <button
-                    @click="completeOrder(order.id)"
-                    :disabled="completingOrder === order.id"
-                    class="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    <span v-if="completingOrder === order.id">Completing...</span>
-                    <span v-else>Mark as Completed</span>
-                  </button>
+                <!-- Loyalty Points Info -->
+                <div class="mt-3">
+                  <span v-if="order.loyalty_points_earned > 0" class="text-green-600 text-sm font-medium">
+                    You earned {{ order.loyalty_points_earned }} loyalty points for this order.
+                  </span>
+                  <span v-else class="text-yellow-600 text-sm font-medium">
+                    Complete this order to earn {{ Math.floor(order.total_amount) }} loyalty points.
+                  </span>
                 </div>
               </div>
             </div>
@@ -174,14 +172,14 @@ const completeOrder = async (orderId: number) => {
     if (response.ok) {
       const data = await response.json()
       loyaltyPoints.value = data.total_loyalty_points
-      
+
       // Update the order status in the local state
       const orderIndex = orders.value.findIndex(order => order.id === orderId)
       if (orderIndex !== -1) {
         orders.value[orderIndex].status = 'delivered'
         orders.value[orderIndex].loyalty_points_earned = data.loyalty_points_earned
       }
-      
+
       // Show success message
       alert(`Order completed! You earned ${data.loyalty_points_earned} loyalty points.`)
     } else {

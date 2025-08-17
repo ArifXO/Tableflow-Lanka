@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Anindo',
                 'password' => Hash::make('anindo22'),
                 'email_verified_at' => now(),
+                'loyalty_points' => 5000,
             ]
         );
         $this->call([
