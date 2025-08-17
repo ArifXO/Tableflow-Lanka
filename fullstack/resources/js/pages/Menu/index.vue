@@ -54,6 +54,10 @@ const totalPrice = computed(() => {
   return basketItems.value.reduce((total, item) => total + (item.price * item.quantity), 0);
 });
 
+const potentialLoyaltyPoints = computed(() => {
+  return Math.floor(totalPrice.value);
+});
+
 const submitOrder = async () => {
   if (basketItems.value.length === 0) return;
 
@@ -84,8 +88,9 @@ const submitOrder = async () => {
       basketItems.value = [];
       showBasket.value = false;
 
-      // You can add a toast notification here
-      alert('Order placed successfully!');
+      // Show success message with loyalty points
+      const potentialPoints = result.potential_loyalty_points || potentialLoyaltyPoints.value;
+      alert(`Order placed successfully! You'll earn ${potentialPoints} loyalty points when the order is completed.`);
 
       // Redirect to dashboard to see the order
       router.visit('/dashboard');
@@ -164,9 +169,13 @@ const submitOrder = async () => {
       </div>
 
       <div v-if="basketItems.length > 0" class="p-4 border-t border-primary/10 bg-primary/5 flex-shrink-0">
-        <div class="flex justify-between items-center mb-3">
+        <div class="flex justify-between items-center mb-2">
           <span class="font-semibold text-primary">Total:</span>
           <span class="font-bold text-primary">৳{{ totalPrice }}</span>
+        </div>
+        <div class="flex justify-between items-center mb-3 text-sm">
+          <span class="text-primary/70">Potential Loyalty Points:</span>
+          <span class="font-medium text-green-600">+{{ potentialLoyaltyPoints }} pts</span>
         </div>
         <button
           @click="submitOrder"

@@ -34,4 +34,65 @@ class Order extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    /**
+     * Mark order as completed and award loyalty points
+     *
+     * @return bool
+     */
+    public function markAsCompleted(): bool
+    {
+        if ($this->status !== 'delivered') {
+            $this->update(['status' => 'delivered']);
+            
+            // Award loyalty points based on order total
+            $pointsEarned = $this->calculateLoyaltyPoints();
+            $this->user->addLoyaltyPoints($pointsEarned);
+            
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Calculate loyalty points based on order total
+     * 1 point per $1 spent (you can adjust this ratio)
+     *
+     * @return int
+     */
+    public function calculateLoyaltyPoints(): int
+    {
+        return (int) $this->total_amount;
+    }
+
+    /**
+     * Check if order is completed
+     *
+     * @return bool
+     */
+    public function isCompleted(): bool
+    {
+        return $this->status === 'delivered';
+    }
+
+    /**
+     * Check if order is pending
+     *
+     * @return bool
+     */
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
+    }
+
+    /**
+     * Check if order is cancelled
+     *
+     * @return bool
+     */
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
 }

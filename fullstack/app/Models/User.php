@@ -22,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'loyalty_points',
     ];
 
     /**
@@ -61,5 +62,52 @@ class User extends Authenticatable
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Add loyalty points to the user
+     *
+     * @param int $points
+     * @return void
+     */
+    public function addLoyaltyPoints(int $points): void
+    {
+        $this->increment('loyalty_points', $points);
+    }
+
+    /**
+     * Deduct loyalty points from the user
+     *
+     * @param int $points
+     * @return bool
+     */
+    public function deductLoyaltyPoints(int $points): bool
+    {
+        if ($this->loyalty_points >= $points) {
+            $this->decrement('loyalty_points', $points);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get the user's current loyalty points
+     *
+     * @return int
+     */
+    public function getLoyaltyPoints(): int
+    {
+        return $this->loyalty_points ?? 0;
+    }
+
+    /**
+     * Check if user has enough loyalty points
+     *
+     * @param int $requiredPoints
+     * @return bool
+     */
+    public function hasEnoughLoyaltyPoints(int $requiredPoints): bool
+    {
+        return $this->getLoyaltyPoints() >= $requiredPoints;
     }
 }

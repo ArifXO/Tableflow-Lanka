@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ShoppingBag, Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X } from 'lucide-vue-next';
+import { ShoppingBag, Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X, Gift } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Dish {
@@ -51,6 +51,8 @@ interface Stats {
   total_reservations: number;
   pending_orders: number;
   confirmed_reservations: number;
+  loyalty_points: number;
+  completed_orders: number;
 }
 
 defineProps<{
@@ -195,7 +197,7 @@ const formatDateTime = (dateString: string) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
             <!-- Stats Cards -->
-            <div class="grid auto-rows-min gap-3 md:grid-cols-4">
+            <div class="grid auto-rows-min gap-3 md:grid-cols-5">
                 <div class="bg-[#fcfcf2] border border-primary/20 rounded-lg p-4">
                     <div class="flex items-center justify-between">
                         <div>
@@ -233,6 +235,16 @@ const formatDateTime = (dateString: string) => {
                             <p class="text-xl font-bold text-primary">{{ stats.confirmed_reservations }}</p>
                         </div>
                         <CheckCircle class="h-6 w-6 text-primary/40" />
+                    </div>
+                </div>
+
+                <div class="bg-[#fcfcf2] border border-primary/20 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-primary/60">Loyalty Points</p>
+                            <p class="text-xl font-bold text-green-600">{{ stats.loyalty_points }}</p>
+                        </div>
+                        <Gift class="h-6 w-6 text-green-500" />
                     </div>
                 </div>
             </div>

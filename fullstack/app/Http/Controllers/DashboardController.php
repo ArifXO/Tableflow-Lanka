@@ -37,6 +37,8 @@ class DashboardController extends Controller
                 'total_reservations' => Reservation::where('user_id', $user->id)->count(),
                 'pending_orders' => Order::where('user_id', $user->id)->where('status', 'pending')->count(),
                 'confirmed_reservations' => Reservation::where('user_id', $user->id)->where('status', 'confirmed')->count(),
+                'loyalty_points' => $user->getLoyaltyPoints(),
+                'completed_orders' => Order::where('user_id', $user->id)->where('status', 'delivered')->count(),
             ]
         ]);
     }

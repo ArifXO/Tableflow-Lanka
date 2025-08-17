@@ -20,6 +20,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/menu', [MenuController::class, 'index'])->name('menu.index');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    
+    // Loyalty Points and Order Management Routes
+    Route::get('/loyalty-points', function () {
+        return Inertia::render('LoyaltyPoints');
+    })->name('loyalty.points.page');
+    Route::post('/orders/{orderId}/complete', [OrderController::class, 'completeOrder'])->name('orders.complete');
+    Route::get('/api/loyalty-points', [OrderController::class, 'getLoyaltyPoints'])->name('loyalty.points');
+    Route::get('/api/order-history', [OrderController::class, 'getOrderHistory'])->name('orders.history');
 });
 
 
