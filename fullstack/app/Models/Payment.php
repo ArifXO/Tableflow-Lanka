@@ -7,12 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
-    protected $fillable = [
-        'order_id', 'amount', 'tip_amount', 'method', 'status', 'meta'
-    ];
+    protected $fillable = [ 'order_id', 'amount', 'tip_amount', 'method', 'status' ];
 
     protected $casts = [
-        'meta' => 'array',
         'amount' => 'decimal:2',
         'tip_amount' => 'decimal:2'
     ];
@@ -22,3 +19,4 @@ class Payment extends Model
         return $this->belongsTo(Order::class);
     }
 }
+

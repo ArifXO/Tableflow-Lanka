@@ -5,6 +5,7 @@ use App\Http\Controllers\ManagerDashboardController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ReservationController;
+// Removed ManagerOrderController (to be reimplemented)
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -28,6 +29,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('dashboard/kitchen', KitchenDashboardController::class)->middleware('role:kitchen,manager')->name('kitchen.dashboard');
     Route::get('dashboard/manager', ManagerDashboardController::class)->middleware('role:manager')->name('manager.dashboard');
+    // Manager order history page
+    // Manager orders page route will be re-added after reimplementation
 });
 
 // Kitchen API endpoints
@@ -49,8 +52,10 @@ Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::get('/orders/history', function () {
         return Inertia::render('Orders/History');
     })->name('orders.history.page');
-    Route::get('/api/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class, 'apiShow'])->name('orders.bill_split.api');
-    Route::post('/orders/{order}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('orders.payments.store');
+    // Minimal Bill split & payment routes (refactored)
+    Route::get('/api/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class,'apiShow'])->name('orders.bill_split.api');
+    Route::post('/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class,'store'])->name('orders.bill_split.store');
+    Route::post('/orders/{order}/payments', [\App\Http\Controllers\PaymentController::class,'store'])->name('orders.payments.store');
     Route::post('/orders/{orderId}/complete', [OrderController::class, 'completeOrder'])->name('orders.complete');
     Route::get('/api/loyalty-points', [OrderController::class, 'getLoyaltyPoints'])->name('loyalty.points');
     Route::get('/api/order-history', [OrderController::class, 'getOrderHistory'])->name('orders.history');
@@ -65,8 +70,11 @@ Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::patch('/reservation/{id}/cancel', [ReservationController::class, 'cancel'])->name('reservation.cancel');
 
     // Bill Split & Tip
-    Route::post('/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class, 'createPayment'])->name('orders.bill_split.create');
+    // (legacy area) already covered above
 });
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
+
+// Manager API endpoints (placed after auth includes to ensure middleware definitions exist)
+// Manager API endpoints removed for refactor

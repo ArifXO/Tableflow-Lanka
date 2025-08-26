@@ -4,6 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ShoppingBag, Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X, Gift } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
+import { jsonFetch } from '@/lib/csrf';
 
 interface Dish {
   id: number;
@@ -97,9 +98,7 @@ async function openSplit(order: Order){
   errorMessage.value = null;
   console.log('[Split] Opening modal for order', order.id);
   try {
-    const res = await fetch(`/api/orders/${order.id}/bill-split`, { headers:{'Accept':'application/json'} });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.message || 'Failed');
+  const data = await jsonFetch(`/api/orders/${order.id}/bill-split`);
     orderDetail.value = data.order;
     if (data.billSplit) {
       tipAmount.value = Number(data.billSplit.tip_amount);
@@ -122,12 +121,8 @@ async function saveSplitAndPay(){
   savingSplit.value = true;
   try {
     const splitPayload = { participants: participants.value, tip_percent: tipPercent.value ?? undefined, tip_amount: tipAmount.value ?? undefined };
-    const splitRes = await fetch(`/orders/${activeOrderId.value}/bill-split`, { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''}, body: JSON.stringify(splitPayload)});
-    const splitData = await splitRes.json();
-    if(!splitRes.ok) throw new Error(splitData.message || 'Failed to save split');
-    const payRes = await fetch(`/orders/${activeOrderId.value}/payments`, { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''}, body: JSON.stringify({ method: paymentMethod.value, tip_amount: computedTipAmount.value })});
-    const payData = await payRes.json();
-    if(!payRes.ok) throw new Error(payData.message || 'Payment failed');
+  await jsonFetch(`/orders/${activeOrderId.value}/bill-split`, { method:'POST', body: JSON.stringify(splitPayload) });
+  await jsonFetch(`/orders/${activeOrderId.value}/payments`, { method:'POST', body: JSON.stringify({ method: paymentMethod.value, tip_amount: computedTipAmount.value }) });
     alert('Split & payment saved');
     showSplitModal.value=false;
   } catch(e){
@@ -190,22 +185,13 @@ const cancelReservation = async (reservationId: number) => {
   cancellingReservations.value.add(reservationId);
 
   try {
-    const response = await fetch(`/reservation/${reservationId}/cancel`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-      },
-    });
-
-    const result = await response.json();
-
-    if (response.ok) {
+    const result = await jsonFetch(`/reservation/${reservationId}/cancel`, { method:'PATCH' });
+    if (result) {
       alert('Reservation cancelled successfully!');
       // Reload the page to update the data
       router.visit('/dashboard');
     } else {
-      throw new Error(result.message || 'Failed to cancel reservation');
+      throw new Error('Failed to cancel reservation');
     }
   } catch (error) {
     console.error('Cancel reservation error:', error);
