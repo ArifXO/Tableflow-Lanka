@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -35,6 +36,16 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function billSplit(): HasOne
+    {
+        return $this->hasOne(BillSplit::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     /**
      * Mark order as completed and award loyalty points
      *
@@ -44,14 +55,14 @@ class Order extends Model
     {
         if ($this->status !== 'delivered') {
             $this->update(['status' => 'delivered']);
-            
+
             // Award loyalty points based on order total
             $pointsEarned = $this->calculateLoyaltyPoints();
             $this->user->addLoyaltyPoints($pointsEarned);
-            
+
             return true;
         }
-        
+
         return false;
     }
 

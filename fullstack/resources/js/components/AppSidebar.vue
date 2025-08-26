@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type NavItem } from '@/types';
 import { computed } from 'vue';
 import { usePage, Link } from '@inertiajs/vue3';
-import { LayoutGrid, Soup, CalendarSearch, Gift  } from 'lucide-vue-next';
+import { LayoutGrid, Soup, CalendarSearch, Gift } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage();
@@ -21,7 +21,7 @@ const mainNavItems = computed<NavItem[]>(() => {
         items.push({ title: 'Dashboard', href: '/dashboard', icon: LayoutGrid });
         items.push({ title: 'Menu', href: '/menu', icon: Soup });
         items.push({ title: 'Reservation', href: '/reservation', icon: CalendarSearch });
-        items.push({ title: 'Loyalty Points', href: '/loyalty-points', icon: Gift });
+    items.push({ title: 'Order History', href: '/orders/history', icon: Gift });
     } else if (r === 'kitchen') {
         items.push({ title: 'Kitchen Dashboard', href: '/dashboard/kitchen', icon: LayoutGrid });
     } else if (r === 'manager') {

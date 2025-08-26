@@ -8,6 +8,7 @@ use App\Models\Dish;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
@@ -155,10 +156,17 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollback();
+            // Log detailed error for debugging
+            Log::error('Order placement failed', [
+                'user_id' => Auth::id(),
+                'payload' => $request->all(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
             return response()->json([
                 'message' => 'Failed to place order. Please try again.',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

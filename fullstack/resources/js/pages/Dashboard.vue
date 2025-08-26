@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ShoppingBag, Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X, Gift } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 interface Dish {
   id: number;
@@ -62,6 +62,78 @@ defineProps<{
 }>();
 
 const cancellingReservations = ref<Set<number>>(new Set());
+// Bill split modal state
+const showSplitModal = ref(false);
+const loadingSplit = ref(false);
+const activeOrderId = ref<number|null>(null);
+const orderDetail = ref<any>(null);
+const participants = ref<{ name:string; items:number[] }[]>([]);
+const tipPercent = ref<number|null>(null);
+const tipAmount = ref<number|null>(null);
+const paymentMethod = ref<'cash'|'card'|'wallet'>('cash');
+const savingSplit = ref(false);
+const errorMessage = ref<string|null>(null);
+
+const baseShares = computed(()=>{
+  if(!orderDetail.value) return [] as number[];
+  const map: Record<number, number[]> = {};
+  participants.value.forEach((p,pi)=> p.items.forEach(id=> { (map[id]=map[id]||[]).push(pi); }));
+  const shares = participants.value.map(()=>0);
+  (orderDetail.value.items||[]).forEach((it:any)=>{
+    const total = (it.price * it.quantity);
+    const pIdxs = map[it.id] || [];
+    if(pIdxs.length){ const each = total / pIdxs.length; pIdxs.forEach(i=> shares[i]+=each); }
+  });
+  return shares.map(s=> Number(s.toFixed(2)));
+});
+const totalBeforeTip = computed(()=> baseShares.value.reduce((a,b)=> a+b,0));
+const computedTipAmount = computed(()=> tipAmount.value!=null ? Number(tipAmount.value) : (tipPercent.value!=null ? Number((totalBeforeTip.value * (tipPercent.value/100)).toFixed(2)) : 0));
+const shareTotals = computed(()=> baseShares.value.map(bs=> totalBeforeTip.value ? Number((bs + computedTipAmount.value*(bs/totalBeforeTip.value)).toFixed(2)) : 0));
+
+async function openSplit(order: Order){
+  activeOrderId.value = order.id;
+  showSplitModal.value = true;
+  loadingSplit.value = true;
+  errorMessage.value = null;
+  console.log('[Split] Opening modal for order', order.id);
+  try {
+    const res = await fetch(`/api/orders/${order.id}/bill-split`, { headers:{'Accept':'application/json'} });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Failed');
+    orderDetail.value = data.order;
+    if (data.billSplit) {
+      tipAmount.value = Number(data.billSplit.tip_amount);
+      participants.value = data.billSplit.participants.map((p:any)=> ({ name:p.name, items:[...p.items] }));
+    } else {
+      participants.value = [{ name:'You', items: order.order_items.map(i=> i.id) }];
+    }
+    console.log('[Split] Loaded order detail & existing split', orderDetail.value);
+  } catch(e){
+    console.error('[Split] Failed to load split', e);
+    errorMessage.value = (e as any).message || 'Failed to load split';
+  } finally { loadingSplit.value=false; }
+}
+function addParticipant(){ participants.value.push({ name:'Guest '+ (participants.value.length+1), items:[]}); }
+function removeParticipant(i:number){ if(participants.value.length>1) participants.value.splice(i,1); }
+function toggleItem(pIndex:number, itemId:number){ const arr=participants.value[pIndex].items; const idx=arr.indexOf(itemId); if(idx>=0) arr.splice(idx,1); else arr.push(itemId); }
+function closeSplit(){ showSplitModal.value=false; }
+async function saveSplitAndPay(){
+  if(!activeOrderId.value) return;
+  savingSplit.value = true;
+  try {
+    const splitPayload = { participants: participants.value, tip_percent: tipPercent.value ?? undefined, tip_amount: tipAmount.value ?? undefined };
+    const splitRes = await fetch(`/orders/${activeOrderId.value}/bill-split`, { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''}, body: JSON.stringify(splitPayload)});
+    const splitData = await splitRes.json();
+    if(!splitRes.ok) throw new Error(splitData.message || 'Failed to save split');
+    const payRes = await fetch(`/orders/${activeOrderId.value}/payments`, { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''}, body: JSON.stringify({ method: paymentMethod.value, tip_amount: computedTipAmount.value })});
+    const payData = await payRes.json();
+    if(!payRes.ok) throw new Error(payData.message || 'Payment failed');
+    alert('Split & payment saved');
+    showSplitModal.value=false;
+  } catch(e){
+    alert((e as any).message || 'Error');
+  } finally { savingSplit.value=false; }
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -266,11 +338,12 @@ const formatDateTime = (dateString: string) => {
                         </div>
 
                         <div v-else class="divide-y divide-primary/5">
-                            <div
-                                v-for="order in orders"
-                                :key="order.id"
-                                class="p-3 hover:bg-primary/5 transition-colors"
-                            >
+              <div
+                v-for="order in orders"
+                :key="order.id"
+                class="p-3 hover:bg-primary/5 transition-colors cursor-pointer"
+                @click="openSplit(order)"
+              >
                                 <div class="flex items-start justify-between mb-1">
                                     <div>
                                         <p class="font-medium text-primary text-sm">Order #{{ order.id }}</p>
@@ -382,6 +455,71 @@ const formatDateTime = (dateString: string) => {
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- Split Modal -->
+        <div v-if="showSplitModal" class="fixed inset-0 bg-black/40 flex items-start md:items-center justify-center p-4 z-[10000] overflow-y-auto">
+          <div class="bg-[#fcfcf2] rounded-lg shadow-xl w-full max-w-3xl p-6 relative">
+            <button class="absolute top-2 right-2 text-primary/60 hover:text-primary" @click="closeSplit">✕</button>
+            <h2 class="text-xl font-semibold text-primary mb-4">Order #{{ activeOrderId }} Split & Pay</h2>
+            <div v-if="loadingSplit" class="text-sm text-primary/60">Loading...</div>
+            <div v-else-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</div>
+            <div v-else-if="!orderDetail" class="text-sm text-red-600">Failed to load order.</div>
+            <div v-else class="space-y-6">
+              <div>
+                <h3 class="font-medium text-primary mb-2">Items</h3>
+                <div class="flex flex-wrap gap-2 text-xs">
+                  <div v-for="it in orderDetail.items" :key="it.id" class="px-2 py-1 border rounded border-primary/30 bg-primary/5">{{ it.name || it.dish?.bn }} x {{ it.quantity }} = ৳{{ (it.price ?? 0) * it.quantity }}</div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="font-medium text-primary">Participants</h3>
+                  <button @click="addParticipant" class="text-xs px-2 py-1 border border-primary rounded hover:bg-primary/10">Add</button>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div v-for="(p,pi) in participants" :key="pi" class="border rounded p-3 space-y-2 bg-primary/5">
+                    <div class="flex items-center gap-2">
+                      <input v-model="p.name" class="border p-1 text-xs flex-1" />
+                      <button v-if="participants.length>1" @click.stop="removeParticipant(pi)" class="text-red-500 text-xs">Remove</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1 text-[11px]">
+                      <button v-for="it in orderDetail.items" :key="it.id" @click.stop="toggleItem(pi,it.id)" :class="p.items.includes(it.id)?'bg-primary text-[#f5f5dc]':'bg-primary/10 text-primary'" class="px-2 py-1 rounded">{{ it.name || it.dish?.bn }}</button>
+                    </div>
+                    <div class="text-[11px] text-primary/70">Share: ৳{{ baseShares[pi] }} | With Tip: ৳{{ shareTotals[pi] }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="grid md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-primary mb-1">Tip %</label>
+                  <input type="number" v-model.number="tipPercent" class="border p-2 w-full text-sm" placeholder="e.g. 10" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-primary mb-1">Tip Amount</label>
+                  <input type="number" v-model.number="tipAmount" class="border p-2 w-full text-sm" placeholder="e.g. 120" />
+                </div>
+                <div class="text-xs space-y-1">
+                  <p>Subtotal: <strong>৳{{ totalBeforeTip.toFixed(2) }}</strong></p>
+                  <p>Tip: <strong>৳{{ computedTipAmount.toFixed(2) }}</strong></p>
+                  <p>Total: <strong>৳{{ (totalBeforeTip + computedTipAmount).toFixed(2) }}</strong></p>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-4 items-center">
+                <div class="text-sm">
+                  <label class="block text-xs font-medium text-primary mb-1">Payment Method</label>
+                  <select v-model="paymentMethod" class="border p-2 text-sm">
+                    <option value="cash">Cash</option>
+                    <option value="card">Card</option>
+                    <option value="wallet">Wallet</option>
+                  </select>
+                </div>
+                <div class="ml-auto flex gap-2">
+                  <button @click="closeSplit" type="button" class="px-4 py-2 border rounded text-sm">Cancel</button>
+                  <button @click="saveSplitAndPay" :disabled="savingSplit" class="px-4 py-2 bg-primary text-[#f5f5dc] rounded text-sm disabled:opacity-50">{{ savingSplit? 'Saving...' : 'Save & Pay' }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
     </AppLayout>
 </template>

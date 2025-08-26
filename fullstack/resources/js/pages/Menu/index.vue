@@ -72,11 +72,12 @@ const submitOrder = async () => {
       notes: ''
     };
 
-    const response = await fetch('/orders', {
+  const response = await fetch('/orders', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
       },
       body: JSON.stringify(orderData)
     });
@@ -97,9 +98,9 @@ const submitOrder = async () => {
     } else {
       throw new Error(result.message || 'Failed to place order');
     }
-  } catch (error) {
+    } catch (error: any) {
     console.error('Order submission error:', error);
-    alert('Failed to place order. Please try again.');
+    alert(error?.message || 'Failed to place order. Please try again.');
   } finally {
     isSubmittingOrder.value = false;
   }

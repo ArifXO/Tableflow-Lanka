@@ -46,6 +46,11 @@ Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::get('/loyalty-points', function () {
         return Inertia::render('LoyaltyPoints');
     })->name('loyalty.points.page');
+    Route::get('/orders/history', function () {
+        return Inertia::render('Orders/History');
+    })->name('orders.history.page');
+    Route::get('/api/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class, 'apiShow'])->name('orders.bill_split.api');
+    Route::post('/orders/{order}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('orders.payments.store');
     Route::post('/orders/{orderId}/complete', [OrderController::class, 'completeOrder'])->name('orders.complete');
     Route::get('/api/loyalty-points', [OrderController::class, 'getLoyaltyPoints'])->name('loyalty.points');
     Route::get('/api/order-history', [OrderController::class, 'getOrderHistory'])->name('orders.history');
@@ -58,6 +63,9 @@ Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::get('/reservation/availability', [ReservationController::class, 'getTableAvailability'])->name('reservation.availability');
     Route::post('/reservation', [ReservationController::class, 'store'])->name('reservation.store');
     Route::patch('/reservation/{id}/cancel', [ReservationController::class, 'cancel'])->name('reservation.cancel');
+
+    // Bill Split & Tip
+    Route::post('/orders/{order}/bill-split', [\App\Http\Controllers\BillSplitController::class, 'createPayment'])->name('orders.bill_split.create');
 });
 
 require __DIR__.'/settings.php';
