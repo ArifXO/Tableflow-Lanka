@@ -7,7 +7,7 @@ interface Metrics { users:number; orders:number; revenue:number; reservations:nu
 interface Order { id:number; total_amount:number; status:string; created_at:string; user:{ name:string } }
 interface Reservation { id:number; reservation_date:string; reservation_time:string; status:string; user:{ name:string } }
 
-defineProps<{ metrics:Metrics; recentOrders:Order[]; recentReservations:Reservation[]; user:{ name:string; role:string } }>();
+defineProps<{ metrics:Metrics; recentOrders:Order[]; recentReservations:Reservation[]; user:{ name:string; role:string }; dailyReport:{ date:string; sales:number; reservation_count:number; table_turnover_rate:number; top_items:{ dish_id:number; name:string; quantity:number; revenue:number }[] } }>();
 
 const formatCurrency = (n:number) => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 </script>
@@ -46,6 +46,39 @@ const formatCurrency = (n:number) => new Intl.NumberFormat('en-US',{style:'curre
               <span class="capitalize">{{ r.status }}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="bg-[#fcfcf2] border border-primary/20 rounded">
+          <div class="p-3 border-b border-primary/10 font-semibold text-primary flex justify-between items-center">
+            <span>Daily Report ({{ dailyReport.date }})</span>
+          </div>
+          <div class="p-4 text-xs space-y-2">
+            <div class="flex justify-between"><span>Total Sales</span><span class="font-semibold">{{ formatCurrency(dailyReport.sales) }}</span></div>
+            <div class="flex justify-between"><span>Reservations</span><span class="font-semibold">{{ dailyReport.reservation_count }}</span></div>
+            <div class="flex justify-between"><span>Table Turnover Rate</span><span class="font-semibold">{{ dailyReport.table_turnover_rate }}</span></div>
+          </div>
+        </div>
+        <div class="bg-[#fcfcf2] border border-primary/20 rounded">
+          <div class="p-3 border-b border-primary/10 font-semibold text-primary">Top Selling Items</div>
+          <div v-if="!dailyReport.top_items.length" class="p-4 text-xs text-primary/60">No sales yet today.</div>
+          <table v-else class="w-full text-xs">
+            <thead>
+              <tr class="text-left text-primary/60">
+                <th class="p-2">Item</th>
+                <th class="p-2 text-right">Qty</th>
+                <th class="p-2 text-right">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="it in dailyReport.top_items" :key="it.dish_id" class="border-t border-primary/10">
+                <td class="p-2">{{ it.name }}</td>
+                <td class="p-2 text-right">{{ it.quantity }}</td>
+                <td class="p-2 text-right">{{ formatCurrency(it.revenue) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

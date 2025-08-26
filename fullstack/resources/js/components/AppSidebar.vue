@@ -25,9 +25,8 @@ const mainNavItems = computed<NavItem[]>(() => {
     } else if (r === 'kitchen') {
         items.push({ title: 'Kitchen Dashboard', href: '/dashboard/kitchen', icon: LayoutGrid });
     } else if (r === 'manager') {
-        // Manager gets a single main dashboard plus optional quick link to kitchen ops
-        items.push({ title: 'Manager Dashboard', href: '/dashboard/manager', icon: LayoutGrid });
-        items.push({ title: 'Kitchen Ops', href: '/dashboard/kitchen', icon: LayoutGrid });
+    // Manager navigation (removed Kitchen Ops shortcut per request)
+    items.push({ title: 'Manager Dashboard', href: '/dashboard/manager', icon: LayoutGrid });
     } else {
         // Fallback
         items.push({ title: 'Dashboard', href: '/dashboard', icon: LayoutGrid });
