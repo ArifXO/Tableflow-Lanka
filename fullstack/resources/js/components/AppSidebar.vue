@@ -6,11 +6,12 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type NavItem } from '@/types';
 import { computed } from 'vue';
 import { usePage, Link } from '@inertiajs/vue3';
-import { LayoutGrid, Soup, CalendarSearch, Gift } from 'lucide-vue-next';
+import { LayoutGrid, Soup, CalendarSearch, Gift, Receipt } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage();
 const role = computed(()=> (page.props.auth as any)?.user?.role || 'diner');
+const managerPending = computed(()=> (page.props as any)?.managerPendingPayments ?? 0);
 
 // Generate role-specific navigation to avoid redundant dashboard variants
 const mainNavItems = computed<NavItem[]>(() => {
@@ -25,8 +26,9 @@ const mainNavItems = computed<NavItem[]>(() => {
     } else if (r === 'kitchen') {
         items.push({ title: 'Kitchen Dashboard', href: '/dashboard/kitchen', icon: LayoutGrid });
     } else if (r === 'manager') {
-    // Manager navigation (removed Kitchen Ops shortcut per request)
-    items.push({ title: 'Manager Dashboard', href: '/dashboard/manager', icon: LayoutGrid });
+        // Manager navigation
+        items.push({ title: 'Manager Dashboard', href: '/dashboard/manager', icon: LayoutGrid });
+        items.push({ title: 'Payments', href: '/dashboard/manager/orders', icon: Receipt, badge: managerPending.value });
     } else {
         // Fallback
         items.push({ title: 'Dashboard', href: '/dashboard', icon: LayoutGrid });

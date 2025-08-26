@@ -16,7 +16,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Get user's recent orders with order items and dishes
-        $orders = Order::with(['orderItems.dish'])
+    $orders = Order::with(['orderItems.dish','payments'])
             ->where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->limit(10)
@@ -29,8 +29,40 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        // Transform orders to include payment summary
+        $ordersOut = $orders->map(function($o){
+            $firstPayment = $o->payments->first();
+            $confirmedTotal = (float)$o->payments->where('status','confirmed')->sum('amount');
+            return [
+                'id'=>$o->id,
+                'total_amount'=>(float)$o->total_amount,
+                'status'=>$o->status,
+                'order_date'=>$o->order_date,
+                'created_at'=>$o->created_at,
+                'order_items'=>$o->orderItems->map(fn($i)=>[
+                    'id'=>$i->id,
+                    'quantity'=>$i->quantity,
+                    'price'=>(float)$i->price,
+                    'dish'=>[
+                        'id'=>$i->dish?->id,
+                        'bn'=>$i->dish?->name_bn,
+                        'en'=>$i->dish?->name_en,
+                        'price'=>$i->dish?->price,
+                    ]
+                ]),
+                'payment'=> $firstPayment ? [
+                    'id'=>$firstPayment->id,
+                    'status'=>$firstPayment->status,
+                    'method'=>$firstPayment->method,
+                    'amount'=>(float)$firstPayment->amount,
+                ] : null,
+                'confirmed_total'=>$confirmedTotal,
+                'is_fully_confirmed'=>$confirmedTotal >= (float)$o->total_amount,
+            ];
+        });
+
         return Inertia::render('Dashboard', [
-            'orders' => $orders,
+            'orders' => $ordersOut,
             'reservations' => $reservations,
             'stats' => [
                 'total_orders' => Order::where('user_id', $user->id)->count(),

@@ -14,12 +14,14 @@ class Order extends Model
         'total_amount',
         'status',
         'notes',
-        'order_date'
+    'order_date',
+    'loyalty_awarded'
     ];
 
     protected $casts = [
         'order_date' => 'datetime',
-        'total_amount' => 'decimal:2'
+    'total_amount' => 'decimal:2',
+    'loyalty_awarded' => 'boolean'
     ];
 
     // Get the user that owns the order.
@@ -55,15 +57,26 @@ class Order extends Model
     {
         if ($this->status !== 'delivered') {
             $this->update(['status' => 'delivered']);
-
-            // Award loyalty points based on order total
-            $pointsEarned = $this->calculateLoyaltyPoints();
-            $this->user->addLoyaltyPoints($pointsEarned);
+            $this->awardLoyaltyIfNeeded();
 
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Award loyalty points if not already awarded.
+     * This is triggered either on full payment confirmation or delivery.
+     */
+    public function awardLoyaltyIfNeeded(): void
+    {
+        if (!$this->loyalty_awarded) {
+            $pointsEarned = $this->calculateLoyaltyPoints();
+            $this->user->addLoyaltyPoints($pointsEarned);
+            $this->loyalty_awarded = true;
+            $this->save();
+        }
     }
 
     /**

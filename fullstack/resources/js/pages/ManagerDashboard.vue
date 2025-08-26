@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { Users, ShoppingBag, Calendar, DollarSign, CheckCircle } from 'lucide-vue-next';
+import { Users, ShoppingBag, Calendar, CheckCircle } from 'lucide-vue-next';
 
 interface Metrics { users:number; orders:number; revenue:number; reservations:number; active_reservations:number; delivered_orders:number }
 interface Order { id:number; total_amount:number; status:string; created_at:string; user:{ name:string } }
@@ -9,7 +9,8 @@ interface Reservation { id:number; reservation_date:string; reservation_time:str
 
 defineProps<{ metrics:Metrics; recentOrders:Order[]; recentReservations:Reservation[]; user:{ name:string; role:string }; dailyReport:{ date:string; sales:number; reservation_count:number; table_turnover_rate:number; top_items:{ dish_id:number; name:string; quantity:number; revenue:number }[] } }>();
 
-const formatCurrency = (n:number) => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
+// Format currency in Bangladeshi Taka (৳)
+const formatCurrency = (n:number) => new Intl.NumberFormat('en-BD',{style:'currency',currency:'BDT'}).format(n);
 </script>
 
 <template>
@@ -19,11 +20,10 @@ const formatCurrency = (n:number) => new Intl.NumberFormat('en-US',{style:'curre
       <h1 class="text-2xl font-semibold text-primary">Manager Dashboard</h1>
       <div class="grid gap-3 md:grid-cols-6">
         <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-2"><p class="text-xs text-primary/60">Total Users</p><p class="text-xl font-bold text-primary flex items-center gap-1"><Users class="w-4 h-4" /> {{ metrics.users }}</p></div>
-        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-1"><p class="text-xs text-primary/60">Orders</p><p class="text-xl font-bold text-primary flex items-center gap-1"><ShoppingBag class="w-4 h-4" /> {{ metrics.orders }}</p></div>
-        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-1"><p class="text-xs text-primary/60">Delivered</p><p class="text-xl font-bold text-primary flex items-center gap-1"><CheckCircle class="w-4 h-4" /> {{ metrics.delivered_orders }}</p></div>
-        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-1"><p class="text-xs text-primary/60">Reservations</p><p class="text-xl font-bold text-primary flex items-center gap-1"><Calendar class="w-4 h-4" /> {{ metrics.reservations }}</p></div>
-        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-1"><p class="text-xs text-primary/60">Active Res.</p><p class="text-xl font-bold text-primary flex items-center gap-1"><Calendar class="w-4 h-4" /> {{ metrics.active_reservations }}</p></div>
-        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded col-span-2"><p class="text-xs text-primary/60">Revenue</p><p class="text-xl font-bold text-green-700 flex items-center gap-1"><DollarSign class="w-4 h-4" /> {{ formatCurrency(metrics.revenue) }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Orders</p><p class="text-xl font-bold text-primary flex items-center gap-1"><ShoppingBag class="w-4 h-4" /> {{ metrics.orders }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Delivered</p><p class="text-xl font-bold text-primary flex items-center gap-1"><CheckCircle class="w-4 h-4" /> {{ metrics.delivered_orders }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Reservations</p><p class="text-xl font-bold text-primary flex items-center gap-1"><Calendar class="w-4 h-4" /> {{ metrics.reservations }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Revenue</p><p class="text-xl font-bold text-green-700 flex items-center gap-1">৳ {{ formatCurrency(metrics.revenue).replace(/[^0-9.,]/g,'') }}</p></div>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
@@ -49,17 +49,7 @@ const formatCurrency = (n:number) => new Intl.NumberFormat('en-US',{style:'curre
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="bg-[#fcfcf2] border border-primary/20 rounded">
-          <div class="p-3 border-b border-primary/10 font-semibold text-primary flex justify-between items-center">
-            <span>Daily Report ({{ dailyReport.date }})</span>
-          </div>
-          <div class="p-4 text-xs space-y-2">
-            <div class="flex justify-between"><span>Total Sales</span><span class="font-semibold">{{ formatCurrency(dailyReport.sales) }}</span></div>
-            <div class="flex justify-between"><span>Reservations</span><span class="font-semibold">{{ dailyReport.reservation_count }}</span></div>
-            <div class="flex justify-between"><span>Table Turnover Rate</span><span class="font-semibold">{{ dailyReport.table_turnover_rate }}</span></div>
-          </div>
-        </div>
+      <div class="grid gap-4 md:grid-cols-1">
         <div class="bg-[#fcfcf2] border border-primary/20 rounded">
           <div class="p-3 border-b border-primary/10 font-semibold text-primary">Top Selling Items</div>
           <div v-if="!dailyReport.top_items.length" class="p-4 text-xs text-primary/60">No sales yet today.</div>

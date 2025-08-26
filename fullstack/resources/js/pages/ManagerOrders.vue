@@ -46,7 +46,7 @@ async function confirmPayment(paymentId:number){
 const filtered = computed(()=> orders.value.filter(o => !filter.value || o.user.name.toLowerCase().includes(filter.value.toLowerCase()) || String(o.id).includes(filter.value)));
 const format = (n:number) => new Intl.NumberFormat('en-US',{style:'currency', currency:'USD'}).format(n);
 
-const breadcrumbs = computed(()=> [{ title:'Manager', href:'/dashboard/manager' }, { title:'Orders', href:'/dashboard/manager/orders' }]);
+const breadcrumbs = computed(()=> [{ title:'Manager', href:'/dashboard/manager' }, { title:'Payments', href:'/dashboard/manager/orders' }]);
 </script>
 
 <template>
@@ -128,5 +128,6 @@ const breadcrumbs = computed(()=> [{ title:'Manager', href:'/dashboard/manager' 
 </template>
 
 <style scoped>
-details[open] summary { @apply bg-primary/10; }
+/* Tailwind @apply with dynamic slash opacity caused build issue; emulate with rgba */
+details[open] summary { background-color: rgba(59,16,16,0.1); }
 </style>

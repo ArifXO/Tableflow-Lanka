@@ -22,6 +22,7 @@ interface OrderItem {
   dish: Dish;
 }
 
+interface OrderPayment { id:number; status:string; method:string; amount:number }
 interface Order {
   id: number;
   total_amount: number;
@@ -29,6 +30,9 @@ interface Order {
   order_date: string;
   created_at: string;
   order_items: OrderItem[];
+  payment?: OrderPayment|null;
+  confirmed_total?: number;
+  is_fully_confirmed?: boolean;
 }
 
 interface Table {
@@ -68,7 +72,8 @@ const showSplitModal = ref(false);
 const loadingSplit = ref(false);
 const activeOrderId = ref<number|null>(null);
 const orderDetail = ref<any>(null);
-const participants = ref<{ name:string; items:number[] }[]>([]);
+interface ParticipantItem { id:number; quantity:number }
+const participants = ref<{ name:string; items:ParticipantItem[] }[]>([]);
 const tipPercent = ref<number|null>(null);
 const tipAmount = ref<number|null>(null);
 const paymentMethod = ref<'cash'|'card'|'wallet'>('cash');
@@ -77,15 +82,34 @@ const errorMessage = ref<string|null>(null);
 
 const baseShares = computed(()=>{
   if(!orderDetail.value) return [] as number[];
-  const map: Record<number, number[]> = {};
-  participants.value.forEach((p,pi)=> p.items.forEach(id=> { (map[id]=map[id]||[]).push(pi); }));
   const shares = participants.value.map(()=>0);
   (orderDetail.value.items||[]).forEach((it:any)=>{
-    const total = (it.price * it.quantity);
-    const pIdxs = map[it.id] || [];
-    if(pIdxs.length){ const each = total / pIdxs.length; pIdxs.forEach(i=> shares[i]+=each); }
+    const pricePerUnit = it.price;
+    participants.value.forEach((p,pi)=>{
+      const entry = p.items.find(ii=> ii.id===it.id);
+      if(entry && entry.quantity>0){
+        shares[pi] += pricePerUnit * entry.quantity;
+      }
+    });
   });
   return shares.map(s=> Number(s.toFixed(2)));
+});
+const allocationComplete = computed(()=>{
+  if(!orderDetail.value) return false;
+  return (orderDetail.value.items||[]).every((it:any)=>{
+    const allocated = participants.value.reduce((s,p)=> s + (p.items.find(ii=> ii.id===it.id)?.quantity||0),0);
+    return allocated === it.quantity;
+  });
+});
+const remainingByItem = computed(()=>{
+  const map: Record<number, number> = {};
+  if(orderDetail.value){
+    (orderDetail.value.items||[]).forEach((it:any)=>{
+      const allocated = participants.value.reduce((s,p)=> s + (p.items.find(ii=> ii.id===it.id)?.quantity||0),0);
+      map[it.id] = it.quantity - allocated;
+    });
+  }
+  return map;
 });
 const totalBeforeTip = computed(()=> baseShares.value.reduce((a,b)=> a+b,0));
 const computedTipAmount = computed(()=> tipAmount.value!=null ? Number(tipAmount.value) : (tipPercent.value!=null ? Number((totalBeforeTip.value * (tipPercent.value/100)).toFixed(2)) : 0));
@@ -102,9 +126,9 @@ async function openSplit(order: Order){
     orderDetail.value = data.order;
     if (data.billSplit) {
       tipAmount.value = Number(data.billSplit.tip_amount);
-      participants.value = data.billSplit.participants.map((p:any)=> ({ name:p.name, items:[...p.items] }));
+      participants.value = data.billSplit.participants.map((p:any)=> ({ name:p.name, items:(p.items||[]).map((it:any)=> typeof it==='object'? { id:it.id, quantity: it.quantity||1 }: { id:it, quantity:1 }) }));
     } else {
-      participants.value = [{ name:'You', items: order.order_items.map(i=> i.id) }];
+      participants.value = [{ name:'You', items: order.order_items.map(i=> ({ id:i.id, quantity:i.quantity })) }];
     }
     console.log('[Split] Loaded order detail & existing split', orderDetail.value);
   } catch(e){
@@ -114,15 +138,44 @@ async function openSplit(order: Order){
 }
 function addParticipant(){ participants.value.push({ name:'Guest '+ (participants.value.length+1), items:[]}); }
 function removeParticipant(i:number){ if(participants.value.length>1) participants.value.splice(i,1); }
-function toggleItem(pIndex:number, itemId:number){ const arr=participants.value[pIndex].items; const idx=arr.indexOf(itemId); if(idx>=0) arr.splice(idx,1); else arr.push(itemId); }
+function addItemQuantity(pIndex:number, item:any){
+  const remaining = remainingByItem.value[item.id] ?? 0;
+  if(remaining<=0) return; // no more units to allocate
+  const arr = participants.value[pIndex].items;
+  const existing = arr.find(i=> i.id===item.id);
+  if(existing){ existing.quantity = Math.min(existing.quantity + 1, existing.quantity + remaining); }
+  else arr.push({ id:item.id, quantity:1 });
+}
+function removeItemQuantity(pIndex:number, item:any){
+  const arr = participants.value[pIndex].items;
+  const existing = arr.find(i=> i.id===item.id);
+  if(!existing) return;
+  existing.quantity -=1;
+  if(existing.quantity<=0){ const idx=arr.indexOf(existing); arr.splice(idx,1); }
+}
+function setItemQuantity(pIndex:number, item:any, value:number){
+  value = Math.max(0, Math.min(value, item.quantity));
+  // compute how many units others already have
+  const othersAllocated = participants.value.reduce((s,p,idx)=> idx===pIndex? s : s + (p.items.find(ii=> ii.id===item.id)?.quantity||0),0);
+  const maxForThis = item.quantity - othersAllocated;
+  if(value > maxForThis) value = maxForThis;
+  const arr = participants.value[pIndex].items;
+  let existing = arr.find(i=> i.id===item.id);
+  if(!existing && value>0){ existing = { id:item.id, quantity:0 }; arr.push(existing); }
+  if(existing){ existing.quantity = value; if(existing.quantity===0){ arr.splice(arr.indexOf(existing),1);} }
+}
 function closeSplit(){ showSplitModal.value=false; }
 async function saveSplitAndPay(){
   if(!activeOrderId.value) return;
+  if(!allocationComplete.value){
+    alert('Please allocate all item quantities before saving.');
+    return;
+  }
   savingSplit.value = true;
   try {
-    const splitPayload = { participants: participants.value, tip_percent: tipPercent.value ?? undefined, tip_amount: tipAmount.value ?? undefined };
-  await jsonFetch(`/orders/${activeOrderId.value}/bill-split`, { method:'POST', body: JSON.stringify(splitPayload) });
-  await jsonFetch(`/orders/${activeOrderId.value}/payments`, { method:'POST', body: JSON.stringify({ method: paymentMethod.value, tip_amount: computedTipAmount.value }) });
+    const splitPayload = { participants: participants.value.map(p=> ({ name:p.name, items:p.items.map(i=> ({ id:i.id, quantity:i.quantity })) })), tip_percent: tipPercent.value ?? undefined, tip_amount: tipAmount.value ?? undefined };
+    await jsonFetch(`/orders/${activeOrderId.value}/bill-split`, { method:'POST', body: JSON.stringify(splitPayload) });
+    await jsonFetch(`/orders/${activeOrderId.value}/payments`, { method:'POST', body: JSON.stringify({ method: paymentMethod.value, tip_amount: computedTipAmount.value }) });
     alert('Split & payment saved');
     showSplitModal.value=false;
   } catch(e){
@@ -230,6 +283,17 @@ const getStatusIcon = (status: string) => {
   }
 };
 
+// Payment status helpers (distinct styling from kitchen status)
+const getPaymentStatusMeta = (payment?: OrderPayment|null) => {
+  if(!payment) return { label: 'unpaid', color: 'text-gray-600 bg-gray-100 border border-gray-200' };
+  switch(payment.status){
+    case 'confirmed': return { label: 'payment confirmed', color: 'text-emerald-700 bg-emerald-50 border border-emerald-200' };
+    case 'paid': return { label: 'awaiting confirm', color: 'text-amber-700 bg-amber-50 border border-amber-200' };
+    case 'failed': return { label: 'payment failed', color: 'text-red-700 bg-red-50 border border-red-200' };
+    default: return { label: payment.status, color: 'text-slate-700 bg-slate-50 border border-slate-200' };
+  }
+};
+
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -327,26 +391,24 @@ const formatDateTime = (dateString: string) => {
               <div
                 v-for="order in orders"
                 :key="order.id"
-                class="p-3 hover:bg-primary/5 transition-colors cursor-pointer"
-                @click="openSplit(order)"
+                class="p-3 hover:bg-primary/5 transition-colors"
+                @click="!order.payment && openSplit(order)"
               >
                                 <div class="flex items-start justify-between mb-1">
                                     <div>
                                         <p class="font-medium text-primary text-sm">Order #{{ order.id }}</p>
                                         <p class="text-xs text-primary/60">{{ formatDateTime(order.created_at) }}</p>
                                     </div>
-                                    <div class="flex items-center gap-1">
-                                        <component
-                                            :is="getStatusIcon(order.status)"
-                                            class="h-3 w-3"
-                                            :class="getStatusColor(order.status)"
-                                        />
-                                        <span
-                                            class="px-1.5 py-0.5 rounded-full text-xs font-medium capitalize"
-                                            :class="getStatusColor(order.status)"
-                                        >
-                                            {{ order.status }}
-                                        </span>
+                                    <div class="flex flex-col items-end gap-1">
+                                      <!-- Kitchen status badge -->
+                                      <div class="flex items-center gap-1">
+                                        <component :is="getStatusIcon(order.status)" class="h-3 w-3" :class="getStatusColor(order.status)" />
+                                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize" :class="getStatusColor(order.status)">{{ order.status }}</span>
+                                      </div>
+                                      <!-- Payment status badge (independent styling) -->
+                                      <div v-if="true" class="flex items-center gap-1">
+                                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize" :class="getPaymentStatusMeta(order.payment).color">{{ getPaymentStatusMeta(order.payment).label }}</span>
+                                      </div>
                                     </div>
                                 </div>
 
@@ -364,7 +426,17 @@ const formatDateTime = (dateString: string) => {
                                     </div>
                                 </div>
 
-                                <p class="font-semibold text-primary text-sm">৳{{ order.total_amount }}</p>
+                                <div class="flex items-center justify-between gap-2 mt-1">
+                                  <p class="font-semibold text-primary text-sm">৳{{ order.total_amount }}</p>
+                                  <p class="text-[10px] text-primary/50" v-if="order.payment">৳{{ order.payment.amount }}</p>
+                                </div>
+                                <div class="mt-1 text-[10px]" :class="order.payment ? 'text-primary/60':'text-primary/50 italic'">
+                                  <template v-if="order.payment">
+                                    Method: {{ order.payment.method }}
+                                    <span v-if="order.is_fully_confirmed" class="text-green-700 font-semibold ml-1">Fully Paid</span>
+                                  </template>
+                                  <template v-else>Tap to split & pay</template>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -468,8 +540,19 @@ const formatDateTime = (dateString: string) => {
                       <input v-model="p.name" class="border p-1 text-xs flex-1" />
                       <button v-if="participants.length>1" @click.stop="removeParticipant(pi)" class="text-red-500 text-xs">Remove</button>
                     </div>
-                    <div class="flex flex-wrap gap-1 text-[11px]">
-                      <button v-for="it in orderDetail.items" :key="it.id" @click.stop="toggleItem(pi,it.id)" :class="p.items.includes(it.id)?'bg-primary text-[#f5f5dc]':'bg-primary/10 text-primary'" class="px-2 py-1 rounded">{{ it.name || it.dish?.bn }}</button>
+                    <div class="space-y-1 text-[11px]">
+                      <div v-for="it in orderDetail.items" :key="it.id" class="flex items-center justify-between gap-2">
+                        <span class="flex-1 truncate cursor-pointer select-none" @click.stop="addItemQuantity(pi,it)">
+                          {{ it.name || it.dish?.bn }} ({{ p.items.find(i=>i.id===it.id)?.quantity || 0 }}/{{ it.quantity }})
+                          <span v-if="remainingByItem[it.id]>0" class="ml-1 text-[10px] text-orange-600">{{ remainingByItem[it.id] }} left</span>
+                          <span v-else class="ml-1 text-[10px] text-green-600">ok</span>
+                        </span>
+                        <div class="flex items-center gap-1">
+                          <button type="button" @click.stop="removeItemQuantity(pi,it)" class="px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20">-</button>
+                          <input type="number" :max="it.quantity" min="0" :value="p.items.find(i=>i.id===it.id)?.quantity || 0" @change="setItemQuantity(pi,it, Number(($event.target as HTMLInputElement).value))" class="w-12 border rounded text-center bg-white/70" />
+                          <button type="button" @click.stop="addItemQuantity(pi,it)" class="px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20">+</button>
+                        </div>
+                      </div>
                     </div>
                     <div class="text-[11px] text-primary/70">Share: ৳{{ baseShares[pi] }} | With Tip: ৳{{ shareTotals[pi] }}</div>
                   </div>
@@ -501,7 +584,11 @@ const formatDateTime = (dateString: string) => {
                 </div>
                 <div class="ml-auto flex gap-2">
                   <button @click="closeSplit" type="button" class="px-4 py-2 border rounded text-sm">Cancel</button>
-                  <button @click="saveSplitAndPay" :disabled="savingSplit" class="px-4 py-2 bg-primary text-[#f5f5dc] rounded text-sm disabled:opacity-50">{{ savingSplit? 'Saving...' : 'Save & Pay' }}</button>
+                  <div class="flex items-center gap-2">
+                    <span v-if="!allocationComplete" class="text-[10px] text-red-600">Allocate all quantities</span>
+                    <span v-else class="text-[10px] text-green-600">All quantities allocated</span>
+                    <button @click="saveSplitAndPay" :disabled="savingSplit || !allocationComplete" class="px-4 py-2 bg-primary text-[#f5f5dc] rounded text-sm disabled:opacity-50">{{ savingSplit? 'Saving...' : 'Save & Pay' }}</button>
+                  </div>
                 </div>
               </div>
             </div>

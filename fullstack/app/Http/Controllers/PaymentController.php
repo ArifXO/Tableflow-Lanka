@@ -14,6 +14,14 @@ class PaymentController extends Controller
     {
         if ($order->user_id !== Auth::id()) abort(403);
 
+        // Prevent duplicate payment attempts once any payment exists
+        if ($order->payments()->exists()) {
+            return response()->json([
+                'message' => 'Payment already initiated for this order.',
+                'payment' => $order->payments()->latest()->first()
+            ], 409);
+        }
+
         $data = $request->validate([
             'method' => 'required|string|in:cash,card,wallet',
             'amount' => 'nullable|numeric|min:0',
@@ -32,6 +40,6 @@ class PaymentController extends Controller
             'status' => 'paid'
         ]);
 
-        return response()->json(['message' => 'Payment recorded', 'payment' => $payment], 201);
+    return response()->json(['message' => 'Payment recorded', 'payment' => $payment], 201);
     }
 }

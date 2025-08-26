@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { ShoppingBag, Timer, CheckCircle } from 'lucide-vue-next';
+import { ShoppingBag, Timer, CheckCircle, ChevronDown, ChevronRight } from 'lucide-vue-next';
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 interface Dish { id:number; bn:string; }
@@ -17,6 +17,10 @@ defineProps<{
 const data = ref<{ pending:any[]; in_progress:any[]; completed:any[]; counts:any }|null>(null);
 const loading = ref(false);
 let timer: number | null = null;
+const expanded = ref<Set<number>>(new Set());
+const toggleExpand = (id:number)=> {
+  if(expanded.value.has(id)) expanded.value.delete(id); else expanded.value.add(id);
+};
 
 const fetchData = async () => {
   loading.value = true;
@@ -36,6 +40,10 @@ const updateStatus = async (orderId:number, status:string) => {
   });
   fetchData();
 };
+
+function itemName(it: any){
+  return it?.dish?.name_bn || it?.dish?.name_en || it?.dish?.name || it?.name || it?.dish_name || it?.title || `Item ${it.id}`;
+}
 
 onMounted(() => {
   fetchData();
@@ -67,7 +75,7 @@ onBeforeUnmount(()=> { if (timer) clearInterval(timer); });
               <span class="capitalize">{{ order.status }}</span>
             </div>
             <ul class="mt-1 text-xs text-primary/70 space-y-0.5">
-              <li v-for="item in order.order_items" :key="item.id">{{ item.dish.bn }} x {{ item.quantity }}</li>
+              <li v-for="item in order.order_items" :key="item.id">{{ itemName(item) }} x {{ item.quantity }}</li>
             </ul>
           </div>
         </div>
@@ -76,38 +84,67 @@ onBeforeUnmount(()=> { if (timer) clearInterval(timer); });
       <div class="grid md:grid-cols-3 gap-4 mt-6" v-if="data">
         <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
           <h3 class="font-semibold text-primary mb-2 text-sm">Pending</h3>
-          <div v-for="o in data.pending" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10">
-            <div class="flex justify-between text-xs font-medium text-primary"><span>#{{ o.id }}</span><span>{{ o.items.length }} items</span></div>
-            <ul class="mt-1 text-[11px] text-primary/70">
-              <li v-for="i in o.items" :key="i.id">{{ i.dish.bn }} x {{ i.quantity }}</li>
-            </ul>
-            <div class="flex gap-1 mt-2">
-              <button class="px-2 py-0.5 text-[11px] bg-yellow-600 text-white rounded" @click="updateStatus(o.id,'preparing')">Start</button>
-              <button class="px-2 py-0.5 text-[11px] bg-red-600 text-white rounded" @click="updateStatus(o.id,'cancelled')">Cancel</button>
-            </div>
+          <div v-for="o in data.pending" :key="o.id" class="mb-2 bg-white/60 rounded border border-primary/10 overflow-hidden">
+            <button class="w-full flex items-center justify-between px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10" @click="toggleExpand(o.id)">
+              <span class="flex items-center gap-1"><component :is="expanded.has(o.id)?ChevronDown:ChevronRight" class="w-3 h-3" /> #{{ o.id }} <span class="text-primary/60">• {{ o.items.length }} items</span></span>
+              <span class="uppercase tracking-wide text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">pending</span>
+            </button>
+            <transition name="fade">
+              <div v-if="expanded.has(o.id)" class="px-3 pb-3">
+                <ul class="mt-2 text-[11px] text-primary/70 space-y-0.5">
+                  <li v-for="i in o.items" :key="i.id">{{ itemName(i) }} <span class="font-medium">x {{ i.quantity }}</span></li>
+                </ul>
+                <div class="flex gap-2 mt-3">
+                  <button class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'preparing')">Start</button>
+                  <button class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+                </div>
+              </div>
+            </transition>
           </div>
         </div>
         <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
           <h3 class="font-semibold text-primary mb-2 text-sm">In Progress</h3>
-          <div v-for="o in data.in_progress" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10">
-            <div class="flex justify-between text-xs font-medium text-primary"><span>#{{ o.id }} • {{ o.status }}</span></div>
-            <ul class="mt-1 text-[11px] text-primary/70">
-              <li v-for="i in o.items" :key="i.id">{{ i.dish.bn }} x {{ i.quantity }}</li>
-            </ul>
-            <div class="flex gap-1 mt-2">
-              <button v-if="o.status==='preparing'" class="px-2 py-0.5 text-[11px] bg-blue-600 text-white rounded" @click="updateStatus(o.id,'ready')">Mark Ready</button>
-              <button v-if="o.status==='ready'" class="px-2 py-0.5 text-[11px] bg-green-600 text-white rounded" @click="updateStatus(o.id,'delivered')">Deliver</button>
-              <button v-if="o.status!=='ready'" class="px-2 py-0.5 text-[11px] bg-red-600 text-white rounded" @click="updateStatus(o.id,'cancelled')">Cancel</button>
-            </div>
+          <div v-for="o in data.in_progress" :key="o.id" class="mb-2 bg-white/60 rounded border border-primary/10 overflow-hidden">
+            <button class="w-full flex items-center justify-between px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10" @click="toggleExpand(o.id)">
+              <span class="flex items-center gap-1"><component :is="expanded.has(o.id)?ChevronDown:ChevronRight" class="w-3 h-3" /> #{{ o.id }}</span>
+              <span class="uppercase tracking-wide text-[10px]" :class="o.status==='ready' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'">{{ o.status }}</span>
+            </button>
+            <transition name="fade">
+              <div v-if="expanded.has(o.id)" class="px-3 pb-3">
+                <ul class="mt-2 text-[11px] text-primary/70 space-y-0.5">
+                  <li v-for="i in o.items" :key="i.id">{{ itemName(i) }} <span class="font-medium">x {{ i.quantity }}</span></li>
+                </ul>
+                <div class="flex gap-2 mt-3">
+                  <button v-if="o.status==='preparing'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'ready')">Mark Ready</button>
+                  <button v-if="o.status==='ready'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'delivered')">Deliver</button>
+                  <button v-if="o.status!=='ready'" class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+                </div>
+              </div>
+            </transition>
           </div>
         </div>
         <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
           <h3 class="font-semibold text-primary mb-2 text-sm">Completed</h3>
-          <div v-for="o in data.completed" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10 text-xs text-primary/70">
-            #{{ o.id }} • {{ o.items.length }} items
+          <div v-for="o in data.completed" :key="o.id" class="mb-2 bg-white/60 rounded border border-primary/10 overflow-hidden">
+            <button class="w-full flex items-center justify-between px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10" @click="toggleExpand(o.id)">
+              <span class="flex items-center gap-1"><component :is="expanded.has(o.id)?ChevronDown:ChevronRight" class="w-3 h-3" /> #{{ o.id }}</span>
+              <span class="uppercase tracking-wide text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded">done</span>
+            </button>
+            <transition name="fade">
+              <div v-if="expanded.has(o.id)" class="px-3 pb-3">
+                <ul class="mt-2 text-[11px] text-primary/70 space-y-0.5">
+                  <li v-for="i in o.items" :key="i.id">{{ itemName(i) }} <span class="font-medium">x {{ i.quantity }}</span></li>
+                </ul>
+              </div>
+            </transition>
           </div>
         </div>
       </div>
     </div>
   </AppLayout>
 </template>
+
+<style scoped>
+.fade-enter-active,.fade-leave-active { transition: all .18s ease; }
+.fade-enter-from,.fade-leave-to { opacity:0; transform: translateY(-2px); }
+</style>

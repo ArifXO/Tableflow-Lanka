@@ -16,6 +16,7 @@ export interface NavItem {
     icon?: LucideIcon;
     isActive?: boolean;
     roles?: string[]; // optional roles allowed to see this item
+    badge?: number; // optional badge count
 }
 
 export type AppPageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {

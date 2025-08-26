@@ -29,8 +29,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('dashboard/kitchen', KitchenDashboardController::class)->middleware('role:kitchen,manager')->name('kitchen.dashboard');
     Route::get('dashboard/manager', ManagerDashboardController::class)->middleware('role:manager')->name('manager.dashboard');
-    // Manager order history page
-    // Manager orders page route will be re-added after reimplementation
+    // Manager orders & payments page
+    Route::get('dashboard/manager/orders', function(){ return Inertia::render('ManagerOrders'); })->middleware('role:manager')->name('manager.orders.page');
 });
 
 // Kitchen API endpoints
@@ -77,4 +77,7 @@ require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 
 // Manager API endpoints (placed after auth includes to ensure middleware definitions exist)
-// Manager API endpoints removed for refactor
+Route::middleware(['auth','verified','role:manager'])->group(function(){
+    Route::get('/api/manager/orders', [\App\Http\Controllers\ManagerOrderController::class,'index'])->name('manager.api.orders');
+    Route::post('/api/manager/payments/{payment}/confirm', [\App\Http\Controllers\ManagerOrderController::class,'confirmPayment'])->name('manager.api.payments.confirm');
+});

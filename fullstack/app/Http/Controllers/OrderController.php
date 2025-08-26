@@ -34,7 +34,9 @@ class OrderController extends Controller
                 'quantity' => $i->quantity,
                 'dish' => [
                     'id' => $i->dish?->id,
-                    'bn' => $i->dish?->bn,
+                    'name_bn' => $i->dish?->name_bn,
+                    'name_en' => $i->dish?->name_en,
+                    'name' => $i->dish?->name_bn ?? $i->dish?->name_en,
                 ]
             ])
         ]);
@@ -246,10 +248,11 @@ class OrderController extends Controller
     public function getOrderHistory()
     {
         $orders = Auth::user()->orders()
-            ->with('orderItems.dish')
+            ->with(['orderItems.dish','payments'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($order) {
+                $confirmedTotal = (float)$order->payments->where('status','confirmed')->sum('amount');
                 return [
                     'id' => $order->id,
                     'total_amount' => $order->total_amount,
@@ -257,12 +260,22 @@ class OrderController extends Controller
                     'order_date' => $order->order_date,
                     'loyalty_points_earned' => $order->isCompleted() ? $order->calculateLoyaltyPoints() : 0,
                     'items' => $order->orderItems->map(function ($item) {
+                        $dishName = $item->dish?->name_en ?? $item->dish?->name_bn ?? 'Item';
                         return [
-                            'dish_name' => $item->dish->name,
+                            'dish_name' => $dishName,
                             'quantity' => $item->quantity,
                             'price' => $item->price
                         ];
-                    })
+                    }),
+                    'payments' => $order->payments->map(fn($p)=>[
+                        'id'=>$p->id,
+                        'amount'=>(float)$p->amount,
+                        'tip_amount'=>(float)$p->tip_amount,
+                        'method'=>$p->method,
+                        'status'=>$p->status,
+                        'created_at'=>$p->created_at?->toDateTimeString(),
+                    ]),
+                    'confirmed_total' => $confirmedTotal,
                 ];
             });
 

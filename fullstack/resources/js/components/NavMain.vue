@@ -18,7 +18,9 @@ const page = usePage();
                 <SidebarMenuButton as-child :is-active="item.href === page.url" :tooltip="item.title">
                     <Link :href="item.href">
                         <component :is="item.icon" />
-                        <span>{{ item.title }}</span>
+                        <span class="flex items-center gap-1">{{ item.title }}
+                            <span v-if="item.badge && item.badge>0" class="ml-1 inline-flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] px-1.5 py-0.5 leading-none min-w-[18px]">{{ item.badge }}</span>
+                        </span>
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>
