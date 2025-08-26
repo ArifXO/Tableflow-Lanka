@@ -59,6 +59,8 @@ Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::post('/orders/{orderId}/complete', [OrderController::class, 'completeOrder'])->name('orders.complete');
     Route::get('/api/loyalty-points', [OrderController::class, 'getLoyaltyPoints'])->name('loyalty.points');
     Route::get('/api/order-history', [OrderController::class, 'getOrderHistory'])->name('orders.history');
+    // CSRF helper endpoint (returns a fresh token for AJAX retries)
+    Route::get('/api/csrf-token', function(){ return response()->json(['token'=>csrf_token()]); })->name('csrf.token');
 });
 
 

@@ -17,7 +17,17 @@ export async function jsonFetch(input: RequestInfo | URL, init: RequestInit = {}
   if(init && init.method && ['POST','PUT','PATCH','DELETE'].includes(init.method.toUpperCase()) && init.body === undefined) {
     init.body = JSON.stringify({});
   }
-  const res = await fetch(input, {
+  // If JSON body and _token missing, inject it for extra compatibility
+  try {
+    if(init.body && typeof init.body === 'string' && init.headers && (init.headers as any)['Content-Type']?.includes('application/json')) {
+      const parsed = JSON.parse(init.body);
+      if(parsed && typeof parsed === 'object' && !('_token' in parsed)) {
+        parsed._token = getCsrfToken();
+        init.body = JSON.stringify(parsed);
+      }
+    }
+  } catch {/* ignore parse issues */}
+  const doRequest = () => fetch(input, {
     credentials: 'same-origin',
     headers: {
       ...defaultJsonHeaders(),
@@ -25,11 +35,24 @@ export async function jsonFetch(input: RequestInfo | URL, init: RequestInit = {}
     },
     ...init,
   });
+  let res = await doRequest();
   let data: any = null;
-  try { data = await res.json(); } catch { /* ignore non json */ }
-  if(!res.ok) {
-    const msg = data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
+  try { data = await res.json(); } catch {}
+  if(res.status === 419) {
+    // Try to refresh token once
+    try {
+      const tokenRes = await fetch('/api/csrf-token', { credentials:'same-origin'});
+      const tokenData = await tokenRes.json();
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if(meta) meta.setAttribute('content', tokenData.token);
+      // Rebuild body with new _token if JSON
+      if(init.body && typeof init.body === 'string') {
+        try { const parsed = JSON.parse(init.body); parsed._token = tokenData.token; init.body = JSON.stringify(parsed); } catch {}
+      }
+      res = await doRequest();
+      try { data = await res.json(); } catch {}
+    } catch {/* ignore refresh failure */}
   }
+  if(!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
   return data;
 }
