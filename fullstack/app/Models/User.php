@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'loyalty_points',
+    'role',
     ];
 
     /**
@@ -109,5 +110,23 @@ class User extends Authenticatable
     public function hasEnoughLoyaltyPoints(int $requiredPoints): bool
     {
         return $this->getLoyaltyPoints() >= $requiredPoints;
+    }
+
+    /**
+     * Role helpers
+     */
+    public function isManager(): bool
+    {
+        return $this->role === 'manager';
+    }
+
+    public function isKitchen(): bool
+    {
+        return $this->role === 'kitchen';
+    }
+
+    public function isDiner(): bool
+    {
+        return $this->role === 'diner';
     }
 }

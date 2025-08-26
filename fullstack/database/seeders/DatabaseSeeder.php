@@ -21,6 +21,31 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('anindo22'),
                 'email_verified_at' => now(),
                 'loyalty_points' => 5000,
+                'role' => 'manager',
+            ]
+        );
+
+        // Kitchen staff account
+        User::updateOrCreate(
+            ['email' => 'kitchen@example.com'],
+            [
+                'name' => 'Kitchen Staff',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'loyalty_points' => 0,
+                'role' => 'kitchen',
+            ]
+        );
+
+        // Sample diner account
+        User::updateOrCreate(
+            ['email' => 'diner@example.com'],
+            [
+                'name' => 'Sample Diner',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'loyalty_points' => 200,
+                'role' => 'diner',
             ]
         );
         $this->call([

@@ -1,0 +1,113 @@
+<script setup lang="ts">
+import AppLayout from '@/layouts/AppLayout.vue';
+import { Head } from '@inertiajs/vue3';
+import { ShoppingBag, Timer, CheckCircle } from 'lucide-vue-next';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
+
+interface Dish { id:number; bn:string; }
+interface OrderItem { id:number; quantity:number; dish: Dish; }
+interface Order { id:number; status:string; created_at:string; order_items: OrderItem[]; user:{ id:number; name:string }; }
+
+defineProps<{
+  orders: Order[];
+  stats: { pending:number; preparing:number; ready:number };
+  user: { name:string; role:string };
+}>();
+
+const data = ref<{ pending:any[]; in_progress:any[]; completed:any[]; counts:any }|null>(null);
+const loading = ref(false);
+let timer: number | null = null;
+
+const fetchData = async () => {
+  loading.value = true;
+  try {
+    const res = await fetch('/api/kitchen/orders');
+    data.value = await res.json();
+  } finally {
+    loading.value = false;
+  }
+};
+
+const updateStatus = async (orderId:number, status:string) => {
+  await fetch(`/api/kitchen/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
+    body: JSON.stringify({ status })
+  });
+  fetchData();
+};
+
+onMounted(() => {
+  fetchData();
+  timer = window.setInterval(fetchData, 5000);
+});
+onBeforeUnmount(()=> { if (timer) clearInterval(timer); });
+</script>
+
+<template>
+  <Head title="Kitchen Dashboard" />
+  <AppLayout :breadcrumbs="[{title:'Kitchen', href:'/dashboard/kitchen'}]">
+    <div class="p-4 space-y-4">
+      <h1 class="text-2xl font-semibold text-primary">Kitchen Dashboard</h1>
+      <div class="grid gap-3 md:grid-cols-3">
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Pending</p><p class="text-xl font-bold text-primary flex items-center gap-1"><Timer class="w-4 h-4" /> {{ stats.pending }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Preparing</p><p class="text-xl font-bold text-primary flex items-center gap-1"><ShoppingBag class="w-4 h-4" /> {{ stats.preparing }}</p></div>
+        <div class="bg-[#fcfcf2] p-4 border border-primary/20 rounded"><p class="text-xs text-primary/60">Ready</p><p class="text-xl font-bold text-primary flex items-center gap-1"><CheckCircle class="w-4 h-4" /> {{ stats.ready }}</p></div>
+      </div>
+
+      <div class="bg-[#fcfcf2] border border-primary/20 rounded-lg overflow-hidden">
+        <div class="p-4 border-b border-primary/10 flex justify-between items-center">
+          <h2 class="font-semibold text-primary">Active Orders</h2>
+        </div>
+        <div class="divide-y divide-primary/10">
+          <div v-if="orders.length===0" class="p-4 text-sm text-primary/60">No active orders.</div>
+          <div v-for="order in orders" :key="order.id" class="p-3">
+            <div class="flex justify-between text-sm font-medium text-primary">
+              <span>#{{ order.id }} • {{ order.user.name }}</span>
+              <span class="capitalize">{{ order.status }}</span>
+            </div>
+            <ul class="mt-1 text-xs text-primary/70 space-y-0.5">
+              <li v-for="item in order.order_items" :key="item.id">{{ item.dish.bn }} x {{ item.quantity }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4 mt-6" v-if="data">
+        <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
+          <h3 class="font-semibold text-primary mb-2 text-sm">Pending</h3>
+          <div v-for="o in data.pending" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10">
+            <div class="flex justify-between text-xs font-medium text-primary"><span>#{{ o.id }}</span><span>{{ o.items.length }} items</span></div>
+            <ul class="mt-1 text-[11px] text-primary/70">
+              <li v-for="i in o.items" :key="i.id">{{ i.dish.bn }} x {{ i.quantity }}</li>
+            </ul>
+            <div class="flex gap-1 mt-2">
+              <button class="px-2 py-0.5 text-[11px] bg-yellow-600 text-white rounded" @click="updateStatus(o.id,'preparing')">Start</button>
+              <button class="px-2 py-0.5 text-[11px] bg-red-600 text-white rounded" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
+          <h3 class="font-semibold text-primary mb-2 text-sm">In Progress</h3>
+          <div v-for="o in data.in_progress" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10">
+            <div class="flex justify-between text-xs font-medium text-primary"><span>#{{ o.id }} • {{ o.status }}</span></div>
+            <ul class="mt-1 text-[11px] text-primary/70">
+              <li v-for="i in o.items" :key="i.id">{{ i.dish.bn }} x {{ i.quantity }}</li>
+            </ul>
+            <div class="flex gap-1 mt-2">
+              <button v-if="o.status==='preparing'" class="px-2 py-0.5 text-[11px] bg-blue-600 text-white rounded" @click="updateStatus(o.id,'ready')">Mark Ready</button>
+              <button v-if="o.status==='ready'" class="px-2 py-0.5 text-[11px] bg-green-600 text-white rounded" @click="updateStatus(o.id,'delivered')">Deliver</button>
+              <button v-if="o.status!=='ready'" class="px-2 py-0.5 text-[11px] bg-red-600 text-white rounded" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="bg-[#fcfcf2] border border-primary/20 rounded p-3">
+          <h3 class="font-semibold text-primary mb-2 text-sm">Completed</h3>
+          <div v-for="o in data.completed" :key="o.id" class="mb-2 p-2 bg-white/60 rounded border border-primary/10 text-xs text-primary/70">
+            #{{ o.id }} • {{ o.items.length }} items
+          </div>
+        </div>
+      </div>
+    </div>
+  </AppLayout>
+</template>

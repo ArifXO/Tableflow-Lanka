@@ -12,6 +12,95 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
+    /**
+     * List orders for kitchen staff grouped by phase.
+     */
+    public function kitchenOrders()
+    {
+        $this->authorizeKitchen();
+
+        $orders = Order::with(['orderItems.dish', 'user'])
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $group = fn($statuses) => $orders->whereIn('status', (array) $statuses)->values()->map(fn($o) => [
+            'id' => $o->id,
+            'status' => $o->status,
+            'created_at' => $o->created_at,
+            'user' => ['id' => $o->user?->id, 'name' => $o->user?->name],
+            'items' => $o->orderItems->map(fn($i) => [
+                'id' => $i->id,
+                'quantity' => $i->quantity,
+                'dish' => [
+                    'id' => $i->dish?->id,
+                    'bn' => $i->dish?->bn,
+                ]
+            ])
+        ]);
+
+        return response()->json([
+            'pending' => $group('pending'),
+            'in_progress' => $group(['preparing', 'ready']),
+            'completed' => $group('delivered'),
+            'counts' => [
+                'pending' => $orders->where('status', 'pending')->count(),
+                'preparing' => $orders->where('status', 'preparing')->count(),
+                'ready' => $orders->where('status', 'ready')->count(),
+                'delivered' => $orders->where('status', 'delivered')->count(),
+            ]
+        ]);
+    }
+
+    /**
+     * Update status for an order by kitchen staff.
+     */
+    public function updateStatus(Request $request, Order $order)
+    {
+        $this->authorizeKitchen();
+
+        $request->validate([
+            'status' => 'required|string|in:pending,preparing,ready,delivered,cancelled'
+        ]);
+
+        $new = $request->string('status')->toString();
+        $current = $order->status;
+        $allowedTransitions = [
+            'pending' => ['preparing', 'cancelled'],
+            'preparing' => ['ready', 'cancelled'],
+            'ready' => ['delivered', 'cancelled'],
+            'delivered' => [],
+            'cancelled' => [],
+        ];
+
+        if (!isset($allowedTransitions[$current]) || !in_array($new, $allowedTransitions[$current], true)) {
+            return response()->json([
+                'message' => "Invalid transition from $current to $new"
+            ], 422);
+        }
+
+        $order->update(['status' => $new]);
+
+        if ($new === 'delivered') {
+            // Award points if not already awarded (markAsCompleted handles idempotency)
+            $order->markAsCompleted();
+        }
+
+        return response()->json([
+            'message' => 'Status updated',
+            'order' => $order->fresh()->load('orderItems.dish', 'user')
+        ]);
+    }
+
+    /**
+     * Ensure current user is kitchen or manager.
+     */
+    protected function authorizeKitchen(): void
+    {
+        $user = auth()->user();
+        if (!$user || !in_array($user->role, ['kitchen', 'manager'])) {
+            abort(403, 'Unauthorized');
+        }
+    }
     // Store a newly created order in storage.
     public function store(Request $request)
     {
@@ -84,7 +173,7 @@ class OrderController extends Controller
     {
         try {
             $order = Order::where('user_id', Auth::id())->findOrFail($orderId);
-            
+
             if ($order->isCompleted()) {
                 return response()->json([
                     'message' => 'Order is already completed.',
@@ -103,7 +192,7 @@ class OrderController extends Controller
 
             $pointsEarned = $order->calculateLoyaltyPoints();
             $order->markAsCompleted();
-            
+
             // Refresh the user to get updated loyalty points
             $user = Auth::user()->fresh();
 
@@ -134,7 +223,7 @@ class OrderController extends Controller
     public function getLoyaltyPoints()
     {
         $user = Auth::user();
-        
+
         return response()->json([
             'loyalty_points' => $user->getLoyaltyPoints(),
             'user' => $user->only(['id', 'name', 'email'])
