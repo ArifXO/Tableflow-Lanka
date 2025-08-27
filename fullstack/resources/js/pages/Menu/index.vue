@@ -71,30 +71,61 @@ const submitOrder = async () => {
       })),
       notes: ''
     };
+    // Helper to get current token from meta tag
+    const readMetaToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-  const response = await fetch('/orders', {
+    let csrfToken = readMetaToken();
+    let response = await fetch('/orders', {
       method: 'POST',
+      credentials: 'same-origin', // ensure session cookie sent
       headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrfToken,
       },
       body: JSON.stringify(orderData)
     });
 
-    const result = await response.json();
+    // If CSRF mismatch (Laravel typically returns 419) try once to refresh token then retry
+    if (response.status === 419) {
+      try {
+        const tokenResp = await fetch('/api/csrf-token', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+        if (tokenResp.ok) {
+          const tokenJson = await tokenResp.json();
+          csrfToken = tokenJson.token;
+          // update meta so subsequent requests work
+          const meta = document.querySelector('meta[name="csrf-token"]');
+          if (meta) meta.setAttribute('content', csrfToken);
+          // retry request once
+          response = await fetch('/orders', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify(orderData)
+          });
+        }
+      } catch {
+        // ignore, will fall through to normal error handling
+      }
+    }
+
+    let result: any = {};
+    try { result = await response.json(); } catch { /* non-JSON response */ }
 
     if (response.ok) {
-      // Clear basket and show success message
       basketItems.value = [];
       showBasket.value = false;
-
-      // Show success message with loyalty points
       const potentialPoints = result.potential_loyalty_points || potentialLoyaltyPoints.value;
       alert(`Order placed successfully! You'll earn ${potentialPoints} loyalty points when the order is completed.`);
-
-      // Redirect to dashboard to see the order
       router.visit('/dashboard');
+    } else if (response.status === 419) {
+      throw new Error('Session expired. Please refresh the page and try again.');
     } else {
       throw new Error(result.message || 'Failed to place order');
     }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
+import { jsonFetch } from '@/lib/csrf';
 import { ShoppingBag, Timer, CheckCircle, ChevronDown, ChevronRight } from 'lucide-vue-next';
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
@@ -25,20 +26,64 @@ const toggleExpand = (id:number)=> {
 const fetchData = async () => {
   loading.value = true;
   try {
-    const res = await fetch('/api/kitchen/orders');
-    data.value = await res.json();
-  } finally {
-    loading.value = false;
-  }
+    data.value = await jsonFetch('/api/kitchen/orders');
+  } catch (e:any){
+    console.error('Kitchen fetch failed', e);
+  } finally { loading.value = false; }
 };
+// Track per-order updating state to disable buttons & avoid duplicate requests
+const updating: any = ref<Record<number, boolean>>({});
+
+// Helper to move an order object between groups locally (optimistic UI)
+function applyLocalStatus(orderId:number, newStatus:string){
+  if(!data.value) return;
+  const groups = ['pending','in_progress','completed'] as const;
+  let order:any = null;
+  for(const g of groups){
+    const idx = (data.value as any)[g].findIndex((o:any)=>o.id===orderId);
+    if(idx!==-1){
+      order = (data.value as any)[g][idx];
+      (data.value as any)[g].splice(idx,1);
+      break;
+    }
+  }
+  if(!order) return;
+  order.status = newStatus;
+  if(newStatus==='pending') (data.value as any).pending.unshift(order);
+  else if(['preparing','ready'].includes(newStatus)) (data.value as any).in_progress.unshift(order);
+  else if(newStatus==='delivered') (data.value as any).completed.unshift(order);
+  // cancelled => drop
+}
 
 const updateStatus = async (orderId:number, status:string) => {
-  await fetch(`/api/kitchen/orders/${orderId}/status`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
-    body: JSON.stringify({ status })
-  });
-  fetchData();
+  if(updating.value[orderId]) return; // guard
+  updating.value[orderId] = true;
+
+  // Keep original status for rollback
+  let originalStatus:string|undefined;
+  if(data.value){
+    const all = [...data.value.pending, ...data.value.in_progress, ...data.value.completed];
+    originalStatus = all.find(o=>o.id===orderId)?.status;
+  }
+
+  // Optimistic update
+  applyLocalStatus(orderId, status);
+
+  try {
+    try {
+      const json = await jsonFetch(`/api/kitchen/orders/${orderId}/status`, { method:'PATCH', body: JSON.stringify({ status }) });
+      const serverStatus = json?.order?.status || status;
+      if(serverStatus!==status) applyLocalStatus(orderId, serverStatus);
+    } catch(e:any){
+      if(originalStatus) applyLocalStatus(orderId, originalStatus);
+      alert(e?.message || 'Failed to update status');
+    }
+  } catch (e:any){
+    if(originalStatus) applyLocalStatus(orderId, originalStatus);
+    alert(e?.message || 'Network error updating status');
+  } finally {
+    updating.value[orderId] = false;
+  }
 };
 
 function itemName(it: any){
@@ -95,8 +140,8 @@ onBeforeUnmount(()=> { if (timer) clearInterval(timer); });
                   <li v-for="i in o.items" :key="i.id">{{ itemName(i) }} <span class="font-medium">x {{ i.quantity }}</span></li>
                 </ul>
                 <div class="flex gap-2 mt-3">
-                  <button class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'preparing')">Start</button>
-                  <button class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+                  <button class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition disabled:opacity-50" :disabled="updating[o.id]" @click="updateStatus(o.id,'preparing')">{{ updating[o.id] ? '...' : 'Start' }}</button>
+                  <button class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition disabled:opacity-50" :disabled="updating[o.id]" @click="updateStatus(o.id,'cancelled')">Cancel</button>
                 </div>
               </div>
             </transition>
@@ -115,9 +160,9 @@ onBeforeUnmount(()=> { if (timer) clearInterval(timer); });
                   <li v-for="i in o.items" :key="i.id">{{ itemName(i) }} <span class="font-medium">x {{ i.quantity }}</span></li>
                 </ul>
                 <div class="flex gap-2 mt-3">
-                  <button v-if="o.status==='preparing'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'ready')">Mark Ready</button>
-                  <button v-if="o.status==='ready'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition" @click="updateStatus(o.id,'delivered')">Deliver</button>
-                  <button v-if="o.status!=='ready'" class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition" @click="updateStatus(o.id,'cancelled')">Cancel</button>
+                  <button v-if="o.status==='preparing'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition disabled:opacity-50" :disabled="updating[o.id]" @click="updateStatus(o.id,'ready')">{{ updating[o.id] ? '...' : 'Mark Ready' }}</button>
+                  <button v-if="o.status==='ready'" class="px-2 py-0.5 text-[11px] rounded bg-primary text-[#f5f5dc] hover:bg-primary/90 transition disabled:opacity-50" :disabled="updating[o.id]" @click="updateStatus(o.id,'delivered')">{{ updating[o.id] ? '...' : 'Deliver' }}</button>
+                  <button v-if="o.status!=='ready'" class="px-2 py-0.5 text-[11px] rounded bg-red-600 text-white hover:bg-red-500 transition disabled:opacity-50" :disabled="updating[o.id]" @click="updateStatus(o.id,'cancelled')">Cancel</button>
                 </div>
               </div>
             </transition>

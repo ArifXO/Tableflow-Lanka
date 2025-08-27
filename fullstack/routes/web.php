@@ -44,6 +44,8 @@ Route::middleware(['auth','verified','role:kitchen,manager'])->group(function ()
 Route::middleware(['auth', 'verified','role:diner'])->group(function () {
     Route::get('/menu', [MenuController::class, 'index'])->name('menu.index');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    // Live dashboard orders polling endpoint
+    Route::get('/api/dashboard/orders', [DashboardController::class,'ordersApi'])->name('dashboard.orders.api');
 
     // Loyalty Points and Order Management Routes
     Route::get('/loyalty-points', function () {

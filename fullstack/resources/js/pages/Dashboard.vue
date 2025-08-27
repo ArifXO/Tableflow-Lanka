@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { ShoppingBag, Calendar, Clock, MapPin, CheckCircle, XCircle, AlertCircle, X, Gift } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { jsonFetch } from '@/lib/csrf';
 
 interface Dish {
@@ -65,6 +65,27 @@ defineProps<{
   reservations: Reservation[];
   stats: Stats;
 }>();
+
+// Local reactive copies for live updates
+const liveOrders = ref<Order[]|null>(null);
+const liveStats = ref<Partial<Stats>|null>(null);
+let pollTimer: number | null = null;
+
+async function pollOrders(){
+  try {
+    const res = await fetch('/api/dashboard/orders', { headers: { 'Accept':'application/json' } });
+    if(!res.ok) return;
+    const json = await res.json();
+    liveOrders.value = json.orders;
+    if(json.stats) liveStats.value = { ...liveStats.value, ...json.stats } as any;
+  } catch {/* ignore */}
+}
+
+onMounted(()=> {
+  pollOrders();
+  pollTimer = window.setInterval(pollOrders, 5000); // 5s refresh
+});
+onBeforeUnmount(()=> { if(pollTimer) clearInterval(pollTimer); });
 
 const cancellingReservations = ref<Set<number>>(new Set());
 // Bill split modal state
@@ -324,7 +345,7 @@ const formatDateTime = (dateString: string) => {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs text-primary/60">Total Orders</p>
-                            <p class="text-xl font-bold text-primary">{{ stats.total_orders }}</p>
+                            <p class="text-xl font-bold text-primary">{{ liveStats?.total_orders ?? stats.total_orders }}</p>
                         </div>
                         <ShoppingBag class="h-6 w-6 text-primary/40" />
                     </div>
@@ -334,7 +355,7 @@ const formatDateTime = (dateString: string) => {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs text-primary/60">Pending Orders</p>
-                            <p class="text-xl font-bold text-primary">{{ stats.pending_orders }}</p>
+                            <p class="text-xl font-bold text-primary">{{ liveStats?.pending_orders ?? stats.pending_orders }}</p>
                         </div>
                         <Clock class="h-6 w-6 text-primary/40" />
                     </div>
@@ -364,7 +385,7 @@ const formatDateTime = (dateString: string) => {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-xs text-primary/60">Loyalty Points</p>
-                            <p class="text-xl font-bold text-green-600">{{ stats.loyalty_points }}</p>
+                            <p class="text-xl font-bold text-green-600">{{ liveStats?.loyalty_points ?? stats.loyalty_points }}</p>
                         </div>
                         <Gift class="h-6 w-6 text-green-500" />
                     </div>
@@ -383,13 +404,13 @@ const formatDateTime = (dateString: string) => {
                     </div>
 
                     <div class="max-h-64 overflow-y-auto">
-                        <div v-if="orders.length === 0" class="p-4 text-center text-primary/60 text-sm">
+      <div v-if="(liveOrders || orders).length === 0" class="p-4 text-center text-primary/60 text-sm">
                             No orders yet
                         </div>
 
-                        <div v-else class="divide-y divide-primary/5">
+      <div v-else class="divide-y divide-primary/5">
               <div
-                v-for="order in orders"
+    v-for="order in (liveOrders || orders)"
                 :key="order.id"
                 class="p-3 hover:bg-primary/5 transition-colors"
                 @click="!order.payment && openSplit(order)"

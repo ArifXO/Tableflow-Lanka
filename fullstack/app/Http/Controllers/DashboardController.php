@@ -74,4 +74,54 @@ class DashboardController extends Controller
             ]
         ]);
     }
+
+    // Lightweight JSON endpoint for polling recent orders & stats (for real-time dashboard updates)
+    public function ordersApi()
+    {
+        $user = Auth::user();
+        $orders = Order::with(['orderItems.dish','payments'])
+            ->where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $ordersOut = $orders->map(function($o){
+            $firstPayment = $o->payments->first();
+            $confirmedTotal = (float)$o->payments->where('status','confirmed')->sum('amount');
+            return [
+                'id'=>$o->id,
+                'total_amount'=>(float)$o->total_amount,
+                'status'=>$o->status,
+                'created_at'=>$o->created_at,
+                'order_items'=>$o->orderItems->map(fn($i)=>[
+                    'id'=>$i->id,
+                    'quantity'=>$i->quantity,
+                    'price'=>(float)$i->price,
+                    'dish'=>[
+                        'id'=>$i->dish?->id,
+                        'bn'=>$i->dish?->name_bn,
+                        'en'=>$i->dish?->name_en,
+                    ]
+                ]),
+                'payment'=> $firstPayment ? [
+                    'id'=>$firstPayment->id,
+                    'status'=>$firstPayment->status,
+                    'method'=>$firstPayment->method,
+                    'amount'=>(float)$firstPayment->amount,
+                ] : null,
+                'confirmed_total'=>$confirmedTotal,
+                'is_fully_confirmed'=>$confirmedTotal >= (float)$o->total_amount,
+            ];
+        });
+
+        return response()->json([
+            'orders'=>$ordersOut,
+            'stats'=>[
+                'total_orders' => Order::where('user_id', $user->id)->count(),
+                'pending_orders' => Order::where('user_id', $user->id)->where('status','pending')->count(),
+                'completed_orders' => Order::where('user_id', $user->id)->where('status','delivered')->count(),
+                'loyalty_points' => $user->getLoyaltyPoints(),
+            ]
+        ]);
+    }
 }
