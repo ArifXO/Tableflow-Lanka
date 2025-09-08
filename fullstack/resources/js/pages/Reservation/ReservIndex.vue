@@ -5,6 +5,7 @@ import TableAvailability from '@/components/TableAvailability.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { jsonFetch } from '@/lib/csrf';
 
 // Props from backend
 interface Props {
@@ -92,65 +93,34 @@ const convertTimeFormat = (timeString: string): string => {
 };
 
 const confirmReservation = async () => {
-    if (selectedDate.value && selectedTime.value && selectedTable.value) {
-        try {
-            const response = await fetch('/reservation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-                body: JSON.stringify({
-                    table_id: selectedTable.value.id,
-                    reservation_date: selectedDate.value.toISOString().split('T')[0],
-                    reservation_time: convertTimeFormat(selectedTime.value),
-                    party_size: partySize.value,
-                    customer_name: props.user?.name || '',
-                    customer_email: props.user?.email || ''
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                const dateStr = selectedDate.value.toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                });
-
-                alert(`🎉 Reservation confirmed!\n📅 ${dateStr} at ${selectedTime.value}\n👥 ${partySize.value} ${partySize.value === 1 ? 'guest' : 'guests'}\n🪑 Table ${selectedTable.value.number}`);
-
-                reservationConfirmed.value = true;
-
-                // Refresh table availability
-                if (tableAvailabilityRef.value?.refreshAvailability) {
-                    setTimeout(() => {
-                        tableAvailabilityRef.value.refreshAvailability();
-                    }, 1000);
-                }
-
-                // Reset for next reservation
-                selectedTable.value = null;
-            } else {
-                if (data.errors) {
-                    const errorMessages = Object.values(data.errors).flat();
-                    alert('❌ Validation Error:\n' + errorMessages.join('\n'));
-                } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to create reservation. Please try again.'));
-                }
-            }
-        } catch (error) {
-            console.error('Reservation error:', error);
-            alert('Failed to create reservation. Please try again.');
+    if(!(selectedDate.value && selectedTime.value && selectedTable.value)){
+        const missing: string[] = [];
+        if(!selectedDate.value) missing.push('date');
+        if(!selectedTime.value) missing.push('time');
+        if(!selectedTable.value) missing.push('table');
+        alert('Please provide: '+ missing.join(', '));
+        return;
+    }
+    try {
+        const payload = {
+            table_id: selectedTable.value.id,
+            reservation_date: selectedDate.value.toISOString().split('T')[0],
+            reservation_time: convertTimeFormat(selectedTime.value),
+            party_size: partySize.value,
+            customer_name: props.user?.name || '',
+            customer_email: props.user?.email || ''
+        };
+        await jsonFetch('/reservation', { method:'POST', body: JSON.stringify(payload) });
+        const dateStr = selectedDate.value.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric'});
+        alert(`🎉 Reservation confirmed!\n📅 ${dateStr} at ${selectedTime.value}\n👥 ${partySize.value} ${partySize.value===1?'guest':'guests'}\n🪑 Table ${selectedTable.value.number}`);
+        reservationConfirmed.value = true;
+        if (tableAvailabilityRef.value?.refreshAvailability) {
+            setTimeout(()=> tableAvailabilityRef.value.refreshAvailability(), 500);
         }
-    } else {
-        const missingFields = [];
-        if (!selectedDate.value) missingFields.push('date');
-        if (!selectedTime.value) missingFields.push('time');
-        if (!selectedTable.value) missingFields.push('table');
-
-        alert(`Please provide the following: ${missingFields.join(', ')}`);
+        selectedTable.value = null;
+    } catch(e:any){
+        const msg = e?.message || 'Failed to create reservation.';
+        alert(msg.includes('419') ? 'Session expired. Refresh page and retry.' : `Failed to create reservation. ${msg}`);
     }
 };
 </script>

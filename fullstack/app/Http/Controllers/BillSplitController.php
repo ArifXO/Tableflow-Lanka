@@ -148,4 +148,4 @@ class BillSplitController extends Controller
         if ($order->status === 'cancelled') abort(400,'Cannot split cancelled order');
     }
 }
-    // Temporary debug logging
+    
