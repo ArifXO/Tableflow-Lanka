@@ -16,7 +16,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Get user's recent orders with order items and dishes
-    $orders = Order::with(['orderItems.dish','payments'])
+        $orders = Order::with(['orderItems.dish','payments'])
             ->where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->limit(10)

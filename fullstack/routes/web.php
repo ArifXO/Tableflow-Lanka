@@ -5,7 +5,6 @@ use App\Http\Controllers\ManagerDashboardController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ReservationController;
-// Removed ManagerOrderController (to be reimplemented)
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 

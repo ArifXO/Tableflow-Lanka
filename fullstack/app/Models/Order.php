@@ -24,14 +24,14 @@ class Order extends Model
     'loyalty_awarded' => 'boolean'
     ];
 
-    // Get the user that owns the order.
+
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    // Get the order items for the order.
+
 
     public function orderItems(): HasMany
     {
@@ -48,11 +48,7 @@ class Order extends Model
         return $this->hasMany(Payment::class);
     }
 
-    /**
-     * Mark order as completed and award loyalty points
-     *
-     * @return bool
-     */
+
     public function markAsCompleted(): bool
     {
         if ($this->status !== 'delivered') {
@@ -65,10 +61,7 @@ class Order extends Model
         return false;
     }
 
-    /**
-     * Award loyalty points if not already awarded.
-     * This is triggered either on full payment confirmation or delivery.
-     */
+
     public function awardLoyaltyIfNeeded(): void
     {
         if (!$this->loyalty_awarded) {
@@ -79,42 +72,25 @@ class Order extends Model
         }
     }
 
-    /**
-     * Calculate loyalty points based on order total
-     * 1 point per $1 spent (you can adjust this ratio)
-     *
-     * @return int
-     */
+
     public function calculateLoyaltyPoints(): int
     {
         return (int) $this->total_amount;
     }
 
-    /**
-     * Check if order is completed
-     *
-     * @return bool
-     */
+
     public function isCompleted(): bool
     {
         return $this->status === 'delivered';
     }
 
-    /**
-     * Check if order is pending
-     *
-     * @return bool
-     */
+
     public function isPending(): bool
     {
         return $this->status === 'pending';
     }
 
-    /**
-     * Check if order is cancelled
-     *
-     * @return bool
-     */
+
     public function isCancelled(): bool
     {
         return $this->status === 'cancelled';

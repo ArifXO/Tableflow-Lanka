@@ -27,9 +27,6 @@ class ReservationController extends Controller
         ]);
     }
 
-    /**
-     * Get table availability for a specific date and time
-     */
     public function getTableAvailability(Request $request)
     {
         $request->validate([
@@ -40,7 +37,7 @@ class ReservationController extends Controller
         $date = $request->date;
         $time = $request->time;
 
-        // Check if the date is valid (not in past, not more than 3 days in future)
+
         if (!Reservation::isValidReservationDate($date)) {
             return response()->json([
                 'error' => 'Invalid reservation date. You can only book tables up to 3 days in advance and not in the past.'
@@ -66,7 +63,7 @@ class ReservationController extends Controller
         ]);
     }
 
-    //Store a new reservation
+
     public function store(Request $request)
     {
         $request->validate([
@@ -80,14 +77,14 @@ class ReservationController extends Controller
             'special_requests' => 'nullable|string|max:1000',
         ]);
 
-        // Check if the date is valid
+
         if (!Reservation::isValidReservationDate($request->reservation_date)) {
             throw ValidationException::withMessages([
                 'reservation_date' => 'You can only book tables up to 3 days in advance and not in the past.'
             ]);
         }
 
-        // Check if the table is available
+
         $table = Table::findOrFail($request->table_id);
         if (!$table->isAvailableAt($request->reservation_date, $request->reservation_time)) {
             throw ValidationException::withMessages([
@@ -95,16 +92,16 @@ class ReservationController extends Controller
             ]);
         }
 
-        // Check if party size fits the table
+
         if ($request->party_size > $table->seats) {
             throw ValidationException::withMessages([
                 'party_size' => "This table can only accommodate {$table->seats} guests. Your party size is {$request->party_size}."
             ]);
         }
 
-        // Create the reservation
+
         $reservation = Reservation::create([
-            'user_id' => Auth::id() ?? 1, // Use authenticated user or default guest user
+            'user_id' => Auth::id() ?? 1,
             'table_id' => $request->table_id,
             'reservation_date' => $request->reservation_date,
             'reservation_time' => $request->reservation_time,
@@ -122,7 +119,7 @@ class ReservationController extends Controller
         ], 201);
     }
 
-    // Cancel a reservation
+
     public function cancel(Request $request, $id)
     {
         $userId = Auth::id();
@@ -132,7 +129,7 @@ class ReservationController extends Controller
             ->where('status', 'confirmed')
             ->firstOrFail();
 
-        // Check if reservation is in the future
+
         $reservationDateTime = Carbon::parse($reservation->reservation_date->format('Y-m-d') . ' ' . $reservation->reservation_time);
         if ($reservationDateTime->isPast()) {
             throw ValidationException::withMessages([

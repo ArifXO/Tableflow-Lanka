@@ -15,9 +15,7 @@ class ManagerOrderController extends Controller
         if (!$user || !$user->isManager()) abort(403);
     }
 
-    /**
-     * List orders with payments & items for manager view.
-     */
+
     public function index(Request $request)
     {
         $this->authorizeManager();
@@ -57,9 +55,7 @@ class ManagerOrderController extends Controller
         return response()->json(['orders'=>$orders]);
     }
 
-    /**
-     * Confirm a payment and award loyalty points if order fully confirmed.
-     */
+
     public function confirmPayment(Payment $payment)
     {
         $this->authorizeManager();

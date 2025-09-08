@@ -39,17 +39,17 @@ class ManagerDashboardController extends Controller
             'delivered_orders' => Order::where('status', 'delivered')->count(),
         ];
 
-        // Daily report (today) — scope to current date
+        // Daily report
         $today = Carbon::today();
         $dailyOrders = Order::whereDate('created_at', $today)->get();
         $dailySales = (float) $dailyOrders->sum('total_amount');
         $dailyReservationCount = Reservation::whereDate('reservation_date', $today)->count();
 
-        // Table turnover rate: confirmed reservations today divided by active tables
+        // Table turnover
         $activeTables = Table::where('is_active', true)->count();
         $tableTurnoverRate = $activeTables > 0 ? round($dailyReservationCount / $activeTables, 2) : 0.0;
 
-        // Top selling menu items (by quantity) for today
+        // Top selling menu items (
         $topItems = OrderItem::selectRaw('dish_id, SUM(quantity) as qty, SUM(quantity * price) as revenue')
             ->whereHas('order', fn($q) => $q->whereDate('created_at', $today))
             ->groupBy('dish_id')

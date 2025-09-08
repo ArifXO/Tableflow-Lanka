@@ -13,9 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    /**
-     * List orders for kitchen staff grouped by phase.
-     */
+
     public function kitchenOrders()
     {
         $this->authorizeKitchen();
@@ -54,9 +52,6 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * Update status for an order by kitchen staff.
-     */
     public function updateStatus(Request $request, Order $order)
     {
         $this->authorizeKitchen();
@@ -84,7 +79,6 @@ class OrderController extends Controller
         $order->update(['status' => $new]);
 
         if ($new === 'delivered') {
-            // Award points if not already awarded (markAsCompleted handles idempotency)
             $order->markAsCompleted();
         }
 
@@ -94,9 +88,7 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * Ensure current user is kitchen or manager.
-     */
+
     protected function authorizeKitchen(): void
     {
         $user = auth()->user();
@@ -104,7 +96,8 @@ class OrderController extends Controller
             abort(403, 'Unauthorized');
         }
     }
-    // Store a newly created order in storage.
+
+
     public function store(Request $request)
     {
         $request->validate([
@@ -117,7 +110,7 @@ class OrderController extends Controller
         DB::beginTransaction();
 
         try {
-            // Calculate total amount
+ 
             $totalAmount = 0;
             $orderItemsData = [];
 
@@ -134,7 +127,7 @@ class OrderController extends Controller
                 ];
             }
 
-            // Create the order
+
             $order = Order::create([
                 'user_id' => Auth::id(),
                 'total_amount' => $totalAmount,
@@ -143,7 +136,7 @@ class OrderController extends Controller
                 'order_date' => now(),
             ]);
 
-            // Create order items
+
             foreach ($orderItemsData as $itemData) {
                 $order->orderItems()->create($itemData);
             }
@@ -158,7 +151,7 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollback();
-            // Log detailed error for debugging
+
             Log::error('Order placement failed', [
                 'user_id' => Auth::id(),
                 'payload' => $request->all(),
@@ -173,12 +166,7 @@ class OrderController extends Controller
         }
     }
 
-    /**
-     * Complete an order and award loyalty points
-     *
-     * @param int $orderId
-     * @return \Illuminate\Http\JsonResponse
-     */
+
     public function completeOrder(int $orderId)
     {
         try {
@@ -203,7 +191,7 @@ class OrderController extends Controller
             $pointsEarned = $order->calculateLoyaltyPoints();
             $order->markAsCompleted();
 
-            // Refresh the user to get updated loyalty points
+
             $user = Auth::user()->fresh();
 
             DB::commit();
@@ -225,11 +213,7 @@ class OrderController extends Controller
         }
     }
 
-    /**
-     * Get user's loyalty points
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
+
     public function getLoyaltyPoints()
     {
         $user = Auth::user();
@@ -240,11 +224,7 @@ class OrderController extends Controller
         ], 200);
     }
 
-    /**
-     * Get user's order history with loyalty points information
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
+
     public function getOrderHistory()
     {
         $orders = Auth::user()->orders()
